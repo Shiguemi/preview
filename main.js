@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const url = require('url');
+const exifr = require('exifr');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -43,6 +44,7 @@ ipcMain.handle('select-folder', async () => {
     const filePath = path.join(folderPath, file);
     return {
       name: file,
+      path: filePath,
       url: url.format({
         pathname: filePath,
         protocol: 'file:',
@@ -54,4 +56,16 @@ ipcMain.handle('select-folder', async () => {
   return {
     files,
   };
+});
+
+ipcMain.handle('get-exr-thumbnail', async (event, filePath) => {
+  try {
+    const buffer = await exifr.thumbnail(filePath);
+    if (buffer) {
+      return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+    }
+  } catch (error) {
+    console.error('Error extracting EXR thumbnail:', error);
+  }
+  return null;
 });

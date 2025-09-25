@@ -16,9 +16,17 @@ document.addEventListener('DOMContentLoaded', () => {
       item.className = 'gallery-item';
 
       const extension = file.name.split('.').pop().toLowerCase();
-      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
+      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'exr'].includes(extension)) {
         const img = document.createElement('img');
-        img.src = file.url;
+        if (extension === 'exr') {
+          window.electron.getExrThumbnail(file.path).then(thumbnailUrl => {
+            if (thumbnailUrl) {
+              img.src = thumbnailUrl;
+            }
+          });
+        } else {
+          img.src = file.url;
+        }
         item.appendChild(img);
       } else {
         const icon = document.createElement('div');
