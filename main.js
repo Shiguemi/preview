@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const url = require('url');
 const exifr = require('exifr');
+const gm = require('gm').subClass({ imageMagick: true });
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -59,13 +60,31 @@ ipcMain.handle('select-folder', async () => {
 });
 
 ipcMain.handle('get-exr-thumbnail', async (event, filePath) => {
-  try {
-    const buffer = await exifr.thumbnail(filePath);
-    if (buffer) {
-      return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+  const fileExtension = path.extname(filePath).toLowerCase();
+
+  if (fileExtension === '.exr') {
+    return new Promise((resolve, reject) => {
+      gm(filePath)
+        .resize(200)
+        .toBuffer('JPEG', (err, buffer) => {
+          if (err) {
+            console.error('Error creating EXR thumbnail:', err);
+            resolve(null);
+          } else {
+            resolve(`data:image/jpeg;base64,${buffer.toString('base64')}`);
+          }
+        });
+    });
+  } else {
+    try {
+      const buffer = await exifr.thumbnail(filePath);
+      if (buffer) {
+        return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+      }
+    } catch (error) {
+      console.error('Error extracting thumbnail:', error);
     }
-  } catch (error) {
-    console.error('Error extracting EXR thumbnail:', error);
   }
+
   return null;
 });
