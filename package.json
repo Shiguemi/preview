@@ -1,0 +1,13 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "An Electron application that previews files from a selected folder.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:test": "electron . --remote-debugging-port=9222"
+  },
+  "devDependencies": {
+    "electron": "^38.1.2"
+  }
+}
