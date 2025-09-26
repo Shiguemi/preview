@@ -3,7 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const url = require('url');
 const exifr = require('exifr');
-const gm = require('gm').subClass({ imageMagick: true });
+const { execFile } = require('child_process');
+const tmp = require('tmp');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -59,32 +60,42 @@ ipcMain.handle('select-folder', async () => {
   };
 });
 
-ipcMain.handle('get-exr-thumbnail', async (event, filePath) => {
+ipcMain.handle('get-thumbnail', async (event, filePath) => {
   const fileExtension = path.extname(filePath).toLowerCase();
 
-  if (fileExtension === '.exr') {
-    return new Promise((resolve, reject) => {
-      gm(filePath)
-        .resize(200)
-        .toBuffer('JPEG', (err, buffer) => {
-          if (err) {
-            console.error('Error creating EXR thumbnail:', err);
-            resolve(null);
-          } else {
-            resolve(`data:image/jpeg;base64,${buffer.toString('base64')}`);
-          }
-        });
-    });
-  } else {
+  if (fileExtension !== '.exr') {
     try {
       const buffer = await exifr.thumbnail(filePath);
       if (buffer) {
         return `data:image/jpeg;base64,${buffer.toString('base64')}`;
       }
     } catch (error) {
-      console.error('Error extracting thumbnail:', error);
+      // exifr throws an error if it can't find a thumbnail, which is expected.
     }
+    return null;
   }
 
-  return null;
+  // Handle EXR files by calling the 'convert' command-line tool from ImageMagick.
+  return new Promise((resolve) => {
+    const tmpobj = tmp.fileSync({ postfix: '.jpg' });
+
+    execFile('convert', [filePath, '-resize', '200x200', tmpobj.name], (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error converting EXR file "${filePath}":`, stderr);
+        tmpobj.removeCallback();
+        resolve(null);
+        return;
+      }
+
+      fs.readFile(tmpobj.name, (err, data) => {
+        tmpobj.removeCallback();
+        if (err) {
+          console.error('Error reading temporary thumbnail file:', err);
+          resolve(null);
+          return;
+        }
+        resolve(`data:image/jpeg;base64,${data.toString('base64')}`);
+      });
+    });
+  });
 });
