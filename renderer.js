@@ -1,33 +1,36 @@
 document.addEventListener('DOMContentLoaded', () => {
   const selectFolderBtn = document.getElementById('select-folder-btn');
   const gallery = document.getElementById('gallery');
+  const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
 
-  selectFolderBtn.addEventListener('click', async () => {
-    const result = await window.electron.selectFolder();
-    if (!result) {
-      return;
-    }
+  let files = [];
+  let imageExtensions = [];
 
-    const { files } = result;
+  const renderGallery = () => {
     gallery.innerHTML = '';
+    const hideUnknown = hideUnknownCheckbox.checked;
 
     files.forEach(file => {
+      const extension = file.name.split('.').pop().toLowerCase();
+      const isImage = imageExtensions.includes(extension);
+
+      if (hideUnknown && !isImage) {
+        return;
+      }
+
       const item = document.createElement('div');
       item.className = 'gallery-item';
 
-      const extension = file.name.split('.').pop().toLowerCase();
-      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'exr'].includes(extension)) {
+      if (isImage) {
         const img = document.createElement('img');
         window.electron.getThumbnail(file.path).then(thumbnailUrl => {
           if (thumbnailUrl) {
             img.src = thumbnailUrl;
           } else {
-            // Fallback to the original file URL if no thumbnail is available
             img.src = file.url;
           }
         }).catch(error => {
             console.error('Error getting thumbnail:', error);
-            // Fallback in case of an unexpected error
             img.src = file.url;
         });
         item.appendChild(img);
@@ -44,5 +47,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       gallery.appendChild(item);
     });
+  };
+
+  selectFolderBtn.addEventListener('click', async () => {
+    const result = await window.electron.selectFolder();
+    if (result && result.files) {
+      files = result.files;
+      imageExtensions = result.imageExtensions || [];
+      renderGallery();
+    }
   });
+
+  hideUnknownCheckbox.addEventListener('change', renderGallery);
 });

@@ -6,6 +6,8 @@ const exifr = require('exifr');
 const { execFile } = require('child_process');
 const tmp = require('tmp');
 
+const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'exr'];
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 800,
@@ -57,6 +59,7 @@ ipcMain.handle('select-folder', async () => {
 
   return {
     files,
+    imageExtensions,
   };
 });
 
