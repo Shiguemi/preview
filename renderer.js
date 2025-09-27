@@ -42,10 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
         item.appendChild(icon);
       }
 
-      const label = document.createElement('p');
-      label.textContent = file.name;
-      item.appendChild(label);
-
       gallery.appendChild(item);
     });
   };
