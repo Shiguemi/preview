@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const item = document.createElement('div');
       item.className = 'gallery-item';
+      item.title = file.name;
 
       if (isImage) {
         const img = document.createElement('img');
