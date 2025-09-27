@@ -79,9 +79,14 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
   return new Promise((resolve) => {
     const tmpobj = tmp.fileSync({ postfix: '.jpg' });
 
-    execFile('convert', [filePath, '-resize', '200x200', tmpobj.name], (error, stdout, stderr) => {
+    const command = process.platform === 'win32' ? 'magick' : 'convert';
+    const args = process.platform === 'win32'
+      ? ['convert', filePath, '-resize', '200x200', tmpobj.name]
+      : [filePath, '-resize', '200x200', tmpobj.name];
+
+    execFile(command, args, (error, stdout, stderr) => {
       if (error) {
-        console.error(`Error converting EXR file "${filePath}":`, stderr);
+        console.error(`Error converting EXR file "${filePath}" with command "${command}":`, stderr);
         tmpobj.removeCallback();
         resolve(null);
         return;
