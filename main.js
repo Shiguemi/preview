@@ -61,46 +61,55 @@ ipcMain.handle('select-folder', async () => {
 });
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
-  const fileExtension = path.extname(filePath).toLowerCase();
+    const fileExtension = path.extname(filePath).toLowerCase();
 
-  if (fileExtension !== '.exr') {
-    try {
-      const buffer = await exifr.thumbnail(filePath);
-      if (buffer) {
-        return `data:image/jpeg;base64,${buffer.toString('base64')}`;
-      }
-    } catch (error) {
-      // exifr throws an error if it can't find a thumbnail, which is expected.
-    }
-    return null;
-  }
-
-  // Handle EXR files by calling the 'convert' command-line tool from ImageMagick.
-  return new Promise((resolve) => {
-    const tmpobj = tmp.fileSync({ postfix: '.jpg' });
-
-    const command = process.platform === 'win32' ? 'magick' : 'convert';
-    const args = process.platform === 'win32'
-      ? ['convert', filePath, '-resize', '200x200', tmpobj.name]
-      : [filePath, '-resize', '200x200', tmpobj.name];
-
-    execFile(command, args, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error converting EXR file "${filePath}" with command "${command}":`, stderr);
-        tmpobj.removeCallback();
-        resolve(null);
-        return;
-      }
-
-      fs.readFile(tmpobj.name, (err, data) => {
-        tmpobj.removeCallback();
-        if (err) {
-          console.error('Error reading temporary thumbnail file:', err);
-          resolve(null);
-          return;
+    if (fileExtension !== '.exr') {
+        try {
+            const buffer = await exifr.thumbnail(filePath);
+            if (buffer) {
+                return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+            }
+        } catch (error) {
+            // exifr throws an error if it can't find a thumbnail, which is expected.
         }
-        resolve(`data:image/jpeg;base64,${data.toString('base64')}`);
-      });
+        return null;
+    }
+
+    // Handle EXR files by calling the 'convert' command-line tool from ImageMagick.
+    return new Promise((resolve) => {
+        // Use tmp.tmpName to get a temporary path. ImageMagick will create the file.
+        // This avoids file locking issues on Windows that can occur with tmp.fileSync().
+        tmp.tmpName({ postfix: '.jpg' }, (err, tmpPath) => {
+            if (err) {
+                console.error('Failed to create temporary file name:', err);
+                return resolve(null);
+            }
+
+            const command = process.platform === 'win32' ? 'magick' : 'convert';
+            const args = process.platform === 'win32'
+                ? ['convert', filePath, '-resize', '200x200', tmpPath]
+                : [filePath, '-resize', '200x200', tmpPath];
+
+            execFile(command, args, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`Error converting EXR file "${filePath}" with command "${command}":`, stderr);
+                    // The temp file might not exist, so we clean up without checking.
+                    fs.unlink(tmpPath, () => {});
+                    resolve(null);
+                    return;
+                }
+
+                fs.readFile(tmpPath, (readErr, data) => {
+                    // Clean up the temp file in any case.
+                    fs.unlink(tmpPath, () => {});
+                    if (readErr) {
+                        console.error('Error reading temporary thumbnail file:', readErr);
+                        resolve(null);
+                        return;
+                    }
+                    resolve(`data:image/jpeg;base64,${data.toString('base64')}`);
+                });
+            });
+        });
     });
-  });
 });
