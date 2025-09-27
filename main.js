@@ -116,3 +116,17 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
         });
     });
 });
+
+ipcMain.handle('get-image-data', async (event, filePath) => {
+  return new Promise((resolve, reject) => {
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        console.error('Failed to read image file:', err);
+        return reject(err);
+      }
+      const extension = path.extname(filePath).toLowerCase().substring(1);
+      const mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+      resolve(`data:${mimeType};base64,${data.toString('base64')}`);
+    });
+  });
+});

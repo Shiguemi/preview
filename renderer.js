@@ -14,12 +14,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getImageFiles = () => files.filter(file => imageExtensions.includes(file.name.split('.').pop().toLowerCase()));
 
-  const openImageViewer = (index) => {
+  const openImageViewer = async (index) => {
     const imageFiles = getImageFiles();
     if (index >= 0 && index < imageFiles.length) {
       currentImageIndex = index;
-      fullImage.src = imageFiles[currentImageIndex].url;
-      imageViewer.style.display = 'block';
+      try {
+        const imageData = await window.electron.getImageData(imageFiles[currentImageIndex].path);
+        fullImage.src = imageData;
+        imageViewer.style.display = 'block';
+      } catch (error) {
+        console.error('Error loading full image:', error);
+        // Optionally, you can display an error message to the user in the UI
+      }
     }
   };
 
