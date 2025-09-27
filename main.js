@@ -116,3 +116,52 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
         });
     });
 });
+
+ipcMain.handle('get-image-data', async (event, filePath) => {
+    const fileExtension = path.extname(filePath).toLowerCase();
+
+    if (fileExtension === '.exr') {
+        return new Promise((resolve, reject) => {
+            tmp.tmpName({ postfix: '.jpg' }, (err, tmpPath) => {
+                if (err) {
+                    console.error('Failed to create temporary file name:', err);
+                    return reject(err);
+                }
+
+                const command = process.platform === 'win32' ? 'magick' : 'convert';
+                const args = process.platform === 'win32'
+                    ? ['convert', filePath, tmpPath]
+                    : [filePath, tmpPath];
+
+                execFile(command, args, (error, stdout, stderr) => {
+                    if (error) {
+                        console.error(`Error converting EXR file "${filePath}" with command "${command}":`, stderr);
+                        fs.unlink(tmpPath, () => {});
+                        return reject(new Error(`Failed to convert EXR file: ${stderr}`));
+                    }
+
+                    fs.readFile(tmpPath, (readErr, data) => {
+                        fs.unlink(tmpPath, () => {});
+                        if (readErr) {
+                            console.error('Error reading temporary image file:', readErr);
+                            return reject(readErr);
+                        }
+                        resolve(`data:image/jpeg;base64,${data.toString('base64')}`);
+                    });
+                });
+            });
+        });
+    }
+
+    return new Promise((resolve, reject) => {
+        fs.readFile(filePath, (err, data) => {
+            if (err) {
+                console.error('Failed to read image file:', err);
+                return reject(err);
+            }
+            const extension = fileExtension.substring(1);
+            const mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+            resolve(`data:${mimeType};base64,${data.toString('base64')}`);
+        });
+    });
+});
