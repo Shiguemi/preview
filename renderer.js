@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
 
   let files = [];
+  let imageExtensions = [];
 
   const renderGallery = () => {
     gallery.innerHTML = '';
@@ -11,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     files.forEach(file => {
       const extension = file.name.split('.').pop().toLowerCase();
-      const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'exr'].includes(extension);
+      const isImage = imageExtensions.includes(extension);
 
       if (hideUnknown && !isImage) {
         return;
@@ -52,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const result = await window.electron.selectFolder();
     if (result && result.files) {
       files = result.files;
+      imageExtensions = result.imageExtensions || [];
       renderGallery();
     }
   });
