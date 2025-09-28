@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const imageData = await window.electron.getImageData(imageFiles[currentImageIndex].path);
         fullImage.src = imageData;
-        imageViewer.style.display = 'block';
+        imageViewer.classList.add('visible');
         resetImageTransform(); // Reset transform when a new image is opened
       } catch (error) {
         console.error('Error loading full image:', error);
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const closeImageViewer = () => {
-    imageViewer.style.display = 'none';
+    imageViewer.classList.remove('visible');
   };
 
   const showNextImage = () => {
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
   nextBtn.addEventListener('click', showNextImage);
 
   window.addEventListener('keydown', (e) => {
-    if (imageViewer.style.display === 'block') {
+    if (imageViewer.classList.contains('visible')) {
       if (e.key === 'ArrowRight') {
         showNextImage();
       } else if (e.key === 'ArrowLeft') {
