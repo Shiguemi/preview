@@ -11,8 +11,22 @@ document.addEventListener('DOMContentLoaded', () => {
   let files = [];
   let imageExtensions = [];
   let currentImageIndex = -1;
+  let scale = 1;
+  let posX = 0;
+  let posY = 0;
+  let isDragging = false;
+  let startDragX = 0;
+  let startDragY = 0;
 
   const getImageFiles = () => files.filter(file => imageExtensions.includes(file.name.split('.').pop().toLowerCase()));
+
+  const resetImageTransform = () => {
+    scale = 1;
+    posX = 0;
+    posY = 0;
+    fullImage.style.transform = 'scale(1) translate(0, 0)';
+    fullImage.classList.remove('pannable');
+  };
 
   const openImageViewer = async (index) => {
     const imageFiles = getImageFiles();
@@ -22,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const imageData = await window.electron.getImageData(imageFiles[currentImageIndex].path);
         fullImage.src = imageData;
         imageViewer.style.display = 'block';
+        resetImageTransform(); // Reset transform when a new image is opened
       } catch (error) {
         console.error('Error loading full image:', error);
         // Optionally, you can display an error message to the user in the UI
@@ -112,7 +127,68 @@ document.addEventListener('DOMContentLoaded', () => {
         showPrevImage();
       } else if (e.key === 'Escape') {
         closeImageViewer();
+      } else if (e.key === '0') {
+        resetImageTransform();
       }
+    }
+  });
+
+  imageViewer.addEventListener('wheel', (e) => {
+    e.preventDefault();
+
+    const rect = fullImage.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const zoomFactor = 0.1;
+    const wheel = e.deltaY < 0 ? 1 : -1;
+    const newScale = Math.max(1, scale + wheel * zoomFactor);
+
+    if (newScale === 1) {
+      resetImageTransform();
+      return;
+    }
+
+    const scaleChange = newScale / scale;
+
+    posX = mouseX - (mouseX - posX) * scaleChange;
+    posY = mouseY - (mouseY - posY) * scaleChange;
+    scale = newScale;
+
+    fullImage.style.transform = `scale(${scale}) translate(${posX / scale}px, ${posY / scale}px)`;
+    fullImage.classList.add('pannable');
+  });
+
+  fullImage.addEventListener('mousedown', (e) => {
+    if (scale > 1) {
+      e.preventDefault();
+      isDragging = true;
+      startDragX = e.clientX - posX;
+      startDragY = e.clientY - posY;
+      fullImage.classList.add('panning');
+    }
+  });
+
+  imageViewer.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      e.preventDefault();
+      posX = e.clientX - startDragX;
+      posY = e.clientY - startDragY;
+      fullImage.style.transform = `scale(${scale}) translate(${posX / scale}px, ${posY / scale}px)`;
+    }
+  });
+
+  imageViewer.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      fullImage.classList.remove('panning');
+    }
+  });
+
+  imageViewer.addEventListener('mouseleave', () => {
+    if (isDragging) {
+      isDragging = false;
+      fullImage.classList.remove('panning');
     }
   });
 });
