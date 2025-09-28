@@ -90,8 +90,8 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
 
             const command = process.platform === 'win32' ? 'magick' : 'convert';
             const args = process.platform === 'win32'
-                ? ['convert', filePath, '-resize', '200x200', tmpPath]
-                : [filePath, '-resize', '200x200', tmpPath];
+                ? ['convert', filePath, '-gamma', '2.2', '-resize', '200x200', tmpPath]
+                : [filePath, '-gamma', '2.2', '-resize', '200x200', tmpPath];
 
             execFile(command, args, (error, stdout, stderr) => {
                 if (error) {
@@ -130,8 +130,8 @@ ipcMain.handle('get-image-data', async (event, filePath) => {
 
                 const command = process.platform === 'win32' ? 'magick' : 'convert';
                 const args = process.platform === 'win32'
-                    ? ['convert', filePath, tmpPath]
-                    : [filePath, tmpPath];
+                    ? ['convert', filePath, '-gamma', '2.2', tmpPath]
+                    : [filePath, '-gamma', '2.2', tmpPath];
 
                 execFile(command, args, (error, stdout, stderr) => {
                     if (error) {
