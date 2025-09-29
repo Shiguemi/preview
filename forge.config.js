@@ -9,7 +9,12 @@ module.exports = {
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
-      config: {},
+      config: {
+        name: "Preview",
+        authors: "Leonardo Dinnouti",
+        description: "Simple image previewer",
+        setupIcon: "static/preview_icon.ico"
+      },
     },
     {
       name: '@electron-forge/maker-zip',
