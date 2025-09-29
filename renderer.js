@@ -18,7 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let startDragX = 0;
   let startDragY = 0;
 
+  const DEFAULT_THUMBNAIL_SIZE = 150;
+  let thumbnailSize = DEFAULT_THUMBNAIL_SIZE;
+
   const getImageFiles = () => files.filter(file => imageExtensions.includes(file.name.split('.').pop().toLowerCase()));
+
+  const updateThumbnailSize = () => {
+    gallery.style.gridTemplateColumns = `repeat(auto-fill, minmax(${thumbnailSize}px, 1fr))`;
+  };
 
   const resetImageTransform = () => {
     scale = 1;
@@ -70,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const renderGallery = () => {
+    updateThumbnailSize();
     gallery.innerHTML = '';
     const hideUnknown = hideUnknownCheckbox.checked;
     const imageFiles = getImageFiles();
@@ -144,6 +152,11 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (e.key === '0') {
         resetImageTransform();
       }
+    } else {
+      if (e.key === '0') {
+        thumbnailSize = DEFAULT_THUMBNAIL_SIZE;
+        updateThumbnailSize();
+      }
     }
   });
 
@@ -204,5 +217,16 @@ document.addEventListener('DOMContentLoaded', () => {
       isDragging = false;
       fullImage.classList.remove('panning');
     }
+  });
+
+  gallery.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomFactor = 10;
+    if (e.deltaY < 0) {
+      thumbnailSize += zoomFactor;
+    } else {
+      thumbnailSize = Math.max(50, thumbnailSize - zoomFactor); // Prevents thumbnails from becoming too small
+    }
+    updateThumbnailSize();
   });
 });
