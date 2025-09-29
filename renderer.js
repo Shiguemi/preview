@@ -228,7 +228,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  gallery.addEventListener('wheel', (e) => {
+  window.addEventListener('wheel', (e) => {
+    if (imageViewer.classList.contains('visible') || !e.target.closest('#gallery')) {
+      return;
+    }
+
     e.preventDefault();
     const zoomFactor = 10;
     if (e.deltaY < 0) {
