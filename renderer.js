@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const gallery = document.getElementById('gallery');
   const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
   const zoomSlider = document.getElementById('zoom-slider');
+  const currentFolder = document.getElementById('current-folder');
   const imageViewer = document.getElementById('image-viewer');
   const fullImage = document.getElementById('full-image');
   const closeBtn = document.querySelector('.close-btn');
@@ -128,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (result && result.files) {
       files = result.files;
       imageExtensions = result.imageExtensions || [];
+      currentFolder.textContent = result.folderPath.split(/[\\/]/).pop();
       renderGallery();
 
       // Preload all images in the background
