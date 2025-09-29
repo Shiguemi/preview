@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scale = 1;
     posX = 0;
     posY = 0;
-    fullImage.style.transform = 'scale(1) translate(0, 0)';
+    fullImage.style.transform = '';
     fullImage.classList.remove('pannable');
   };
 
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
   imageViewer.addEventListener('wheel', (e) => {
     e.preventDefault();
 
-    const rect = fullImage.getBoundingClientRect();
+    const rect = imageViewer.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
@@ -176,13 +176,22 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const scaleChange = newScale / scale;
+    // Adjust position to keep the point under the cursor stationary
+    const imageRect = fullImage.getBoundingClientRect();
+    // The transformations are applied to the top-left corner of the image.
+    // To calculate the new position, we need to find the cursor's position relative to the image's top-left corner (including previous translations),
+    // then scale this relative position by the zoom factor, and add it to the current position.
+    const relativeMouseX = (e.clientX - imageRect.left);
+    const relativeMouseY = (e.clientY - imageRect.top);
 
-    posX = mouseX - (mouseX - posX) * scaleChange;
-    posY = mouseY - (mouseY - posY) * scaleChange;
+    const newPosX = posX - (relativeMouseX * (newScale - scale)) / scale;
+    const newPosY = posY - (relativeMouseY * (newScale - scale)) / scale;
+
+    posX = newPosX;
+    posY = newPosY;
     scale = newScale;
 
-    fullImage.style.transform = `scale(${scale}) translate(${posX / scale}px, ${posY / scale}px)`;
+    fullImage.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
     fullImage.classList.add('pannable');
   });
 
@@ -201,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       posX = e.clientX - startDragX;
       posY = e.clientY - startDragY;
-      fullImage.style.transform = `scale(${scale}) translate(${posX / scale}px, ${posY / scale}px)`;
+      fullImage.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
     }
   });
 
