@@ -122,7 +122,7 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
     });
 });
 
-ipcMain.handle('get-image-data', async (event, filePath) => {
+async function loadImageData(filePath) {
     const cacheKey = `full-${filePath}`;
     if (cache.has(cacheKey)) {
         return cache.get(cacheKey);
@@ -175,12 +175,18 @@ ipcMain.handle('get-image-data', async (event, filePath) => {
 
     cache.set(cacheKey, result);
     return result;
+}
+
+ipcMain.handle('get-image-data', (event, filePath) => {
+    return loadImageData(filePath);
 });
 
 ipcMain.handle('preload-images', async (event, filePaths) => {
     for (const filePath of filePaths) {
-        // This will call the get-image-data handler, which in turn will cache the result.
-        // We don't need the result here, just the caching side-effect.
-        await ipcMain.handle('get-image-data', event, filePath);
+        try {
+            await loadImageData(filePath);
+        } catch (error) {
+            console.error(`Failed to preload image: ${filePath}`, error);
+        }
     }
 });
