@@ -7,9 +7,12 @@
 </head>
 <body>
   <!-- <h1>File Preview</h1> -->
-  <input type="checkbox" id="hide-unknown-checkbox" checked>
-  <label for="hide-unknown-checkbox">Hide unknown</label>
-  <button id="select-folder-btn">Select Folder</button>
+  <div class="toolbar">
+    <button id="select-folder-btn">Select Folder</button>
+    <input type="checkbox" id="hide-unknown-checkbox" checked>
+    <label for="hide-unknown-checkbox">Hide unknown</label>
+    <input type="range" id="zoom-slider" min="50" max="300" value="150">
+  </div>
   <div id="gallery"></div>
 
   <div id="image-viewer" class="modal">
