@@ -17,7 +17,13 @@ module.exports = {
     },
     {
       name: '@electron-forge/maker-deb',
-      config: {},
+      config: {
+        options: {
+          maintainer: 'Leonardo Shiguemi Dinnouti',
+          homepage: '',
+          // Other deb-specific options like icon, category, etc.
+        }        
+      },
     },
     {
       name: '@electron-forge/maker-rpm',
