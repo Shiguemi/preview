@@ -7,6 +7,7 @@ const { execFile } = require('child_process');
 const tmp = require('tmp');
 
 const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'exr'];
+const cache = new Map();
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -64,13 +65,19 @@ ipcMain.handle('select-folder', async () => {
 });
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
+    if (cache.has(filePath)) {
+        return cache.get(filePath);
+    }
+
     const fileExtension = path.extname(filePath).toLowerCase();
 
     if (fileExtension !== '.exr') {
         try {
             const buffer = await exifr.thumbnail(filePath);
             if (buffer) {
-                return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+                const thumbnailUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+                cache.set(filePath, thumbnailUrl);
+                return thumbnailUrl;
             }
         } catch (error) {
             // exifr throws an error if it can't find a thumbnail, which is expected.
@@ -80,8 +87,6 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
 
     // Handle EXR files by calling the 'convert' command-line tool from ImageMagick.
     return new Promise((resolve) => {
-        // Use tmp.tmpName to get a temporary path. ImageMagick will create the file.
-        // This avoids file locking issues on Windows that can occur with tmp.fileSync().
         tmp.tmpName({ postfix: '.jpg' }, (err, tmpPath) => {
             if (err) {
                 console.error('Failed to create temporary file name:', err);
@@ -96,32 +101,37 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
             execFile(command, args, (error, stdout, stderr) => {
                 if (error) {
                     console.error(`Error converting EXR file "${filePath}" with command "${command}":`, stderr);
-                    // The temp file might not exist, so we clean up without checking.
                     fs.unlink(tmpPath, () => {});
                     resolve(null);
                     return;
                 }
 
                 fs.readFile(tmpPath, (readErr, data) => {
-                    // Clean up the temp file in any case.
                     fs.unlink(tmpPath, () => {});
                     if (readErr) {
                         console.error('Error reading temporary thumbnail file:', readErr);
                         resolve(null);
                         return;
                     }
-                    resolve(`data:image/jpeg;base64,${data.toString('base64')}`);
+                    const thumbnailUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
+                    cache.set(filePath, thumbnailUrl);
+                    resolve(thumbnailUrl);
                 });
             });
         });
     });
 });
 
-ipcMain.handle('get-image-data', async (event, filePath) => {
+async function loadImageData(filePath) {
+    const cacheKey = `full-${filePath}`;
+    if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+    }
+
     const fileExtension = path.extname(filePath).toLowerCase();
 
-    if (fileExtension === '.exr') {
-        return new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
+        if (fileExtension === '.exr') {
             tmp.tmpName({ postfix: '.jpg' }, (err, tmpPath) => {
                 if (err) {
                     console.error('Failed to create temporary file name:', err);
@@ -150,18 +160,33 @@ ipcMain.handle('get-image-data', async (event, filePath) => {
                     });
                 });
             });
-        });
-    }
-
-    return new Promise((resolve, reject) => {
-        fs.readFile(filePath, (err, data) => {
-            if (err) {
-                console.error('Failed to read image file:', err);
-                return reject(err);
-            }
-            const extension = fileExtension.substring(1);
-            const mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
-            resolve(`data:${mimeType};base64,${data.toString('base64')}`);
-        });
+        } else {
+            fs.readFile(filePath, (err, data) => {
+                if (err) {
+                    console.error('Failed to read image file:', err);
+                    return reject(err);
+                }
+                const extension = fileExtension.substring(1);
+                const mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+                resolve(`data:${mimeType};base64,${data.toString('base64')}`);
+            });
+        }
     });
+
+    cache.set(cacheKey, result);
+    return result;
+}
+
+ipcMain.handle('get-image-data', (event, filePath) => {
+    return loadImageData(filePath);
+});
+
+ipcMain.handle('preload-images', async (event, filePaths) => {
+    for (const filePath of filePaths) {
+        try {
+            await loadImageData(filePath);
+        } catch (error) {
+            console.error(`Failed to preload image: ${filePath}`, error);
+        }
+    }
 });

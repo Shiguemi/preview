@@ -37,6 +37,15 @@ document.addEventListener('DOMContentLoaded', () => {
         fullImage.src = imageData;
         imageViewer.classList.add('visible');
         resetImageTransform(); // Reset transform when a new image is opened
+
+        // Preload next and previous images
+        const nextIndex = (currentImageIndex + 1) % imageFiles.length;
+        const prevIndex = (currentImageIndex - 1 + imageFiles.length) % imageFiles.length;
+        window.electron.preloadImages([
+            imageFiles[nextIndex].path,
+            imageFiles[prevIndex].path
+        ]);
+
       } catch (error) {
         console.error('Error loading full image:', error);
         // Optionally, you can display an error message to the user in the UI
@@ -111,6 +120,11 @@ document.addEventListener('DOMContentLoaded', () => {
       files = result.files;
       imageExtensions = result.imageExtensions || [];
       renderGallery();
+
+      // Preload all images in the background
+      const imageFiles = getImageFiles();
+      const imagePaths = imageFiles.map(file => file.path);
+      window.electron.preloadImages(imagePaths);
     }
   });
 
