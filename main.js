@@ -61,6 +61,7 @@ ipcMain.handle('select-folder', async () => {
   return {
     files,
     imageExtensions,
+    folderPath,
   };
 });
 

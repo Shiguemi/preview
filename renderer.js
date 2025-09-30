@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectFolderBtn = document.getElementById('select-folder-btn');
   const gallery = document.getElementById('gallery');
   const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
+  const zoomSlider = document.getElementById('zoom-slider');
+  const currentFolder = document.getElementById('current-folder');
   const imageViewer = document.getElementById('image-viewer');
   const fullImage = document.getElementById('full-image');
   const closeBtn = document.querySelector('.close-btn');
@@ -127,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (result && result.files) {
       files = result.files;
       imageExtensions = result.imageExtensions || [];
+      currentFolder.textContent = result.folderPath.split(/[\\/]/).pop();
       renderGallery();
 
       // Preload all images in the background
@@ -240,6 +243,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       thumbnailSize = Math.max(50, thumbnailSize - zoomFactor); // Prevents thumbnails from becoming too small
     }
+    zoomSlider.value = thumbnailSize;
+    updateThumbnailSize();
+  });
+
+  zoomSlider.addEventListener('input', (e) => {
+    thumbnailSize = parseInt(e.target.value, 10);
     updateThumbnailSize();
   });
 });
