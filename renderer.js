@@ -124,8 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  selectFolderBtn.addEventListener('click', async () => {
-    const result = await window.electron.selectFolder();
+  const handleFolderOpen = (result) => {
     if (result && result.files) {
       files = result.files;
       imageExtensions = result.imageExtensions || [];
@@ -136,6 +135,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const imageFiles = getImageFiles();
       const imagePaths = imageFiles.map(file => file.path);
       window.electron.preloadImages(imagePaths);
+    }
+  };
+
+  selectFolderBtn.addEventListener('click', async () => {
+    const result = await window.electron.selectFolder();
+    handleFolderOpen(result);
+  });
+
+  gallery.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  gallery.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.dataTransfer.files.length > 0) {
+      const folderPath = e.dataTransfer.files[0].path;
+      const result = await window.electron.openFolder(folderPath);
+      handleFolderOpen(result);
     }
   });
 

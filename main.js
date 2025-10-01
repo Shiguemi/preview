@@ -65,6 +65,38 @@ ipcMain.handle('select-folder', async () => {
   };
 });
 
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  try {
+    const stats = fs.statSync(folderPath);
+    if (!stats.isDirectory()) {
+      console.log(`Attempted to open a file, not a directory: ${folderPath}`);
+      return null; // Or return an error/specific message
+    }
+  } catch (error) {
+    console.error(`Error accessing path: ${folderPath}`, error);
+    return null;
+  }
+
+  const files = fs.readdirSync(folderPath).map(file => {
+    const filePath = path.join(folderPath, file);
+    return {
+      name: file,
+      path: filePath,
+      url: url.format({
+        pathname: filePath,
+        protocol: 'file:',
+        slashes: true
+      })
+    };
+  });
+
+  return {
+    files,
+    imageExtensions,
+    folderPath,
+  };
+});
+
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
     if (cache.has(filePath)) {
         return cache.get(filePath);
