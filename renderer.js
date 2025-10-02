@@ -125,22 +125,45 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const handleFolderOpen = (result) => {
+    console.log('[renderer.js] handleFolderOpen called with:', result);
     if (result && result.files) {
+      console.log(`[renderer.js] Updating gallery with ${result.files.length} files from: ${result.folderPath}`);
       files = result.files;
       imageExtensions = result.imageExtensions || [];
       currentFolder.textContent = result.folderPath.split(/[\\/]/).pop();
+      console.log(`[renderer.js] Current folder text set to: ${currentFolder.textContent}`);
       renderGallery();
 
       // Preload all images in the background
       const imageFiles = getImageFiles();
       const imagePaths = imageFiles.map(file => file.path);
       window.electron.preloadImages(imagePaths);
+    } else {
+      console.error('[renderer.js] handleFolderOpen received no result or files in result:', result);
     }
   };
+
+  // Expose handleFolderOpen to global scope for external access (e.g., drag-and-drop testing)
+  window.handleFolderOpen = handleFolderOpen;
 
   selectFolderBtn.addEventListener('click', async () => {
     const result = await window.electron.selectFolder();
     handleFolderOpen(result);
+  });
+
+  gallery.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    gallery.classList.add('drag-over');
+  });
+
+  gallery.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only remove if we're leaving the gallery itself, not a child element
+    if (e.target === gallery) {
+      gallery.classList.remove('drag-over');
+    }
   });
 
   gallery.addEventListener('dragover', (e) => {
@@ -148,17 +171,47 @@ document.addEventListener('DOMContentLoaded', () => {
     e.stopPropagation();
   });
 
+  // Handle the drop event in the renderer to prevent navigation and signal the main process.
   gallery.addEventListener('drop', async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Crucial: Prevents default navigation behavior.
     e.stopPropagation();
+    gallery.classList.remove('drag-over');
 
-    if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].path) {
-      const folderPath = e.dataTransfer.files[0].path;
-      const result = await window.electron.openFolder(folderPath);
+    console.log('[renderer.js] Drop event detected on gallery. Preventing navigation and signaling main process.');
+    
+    let droppedItemPath = null;
+    if (e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      // With webSecurity: false, file.path might be available for OS-dragged items.
+      console.log(`[renderer.js] Dropped file name: ${file.name}, path: ${file.path}`);
+      if (file.path && typeof file.path === 'string') {
+        droppedItemPath = file.path;
+      }
+    }
+
+    // Signal the main process to show the dialog, passing the path if available.
+    const result = await window.electron.selectFolderFromDrop({ action: 'drop-signaled', path: droppedItemPath });
+    console.log('[renderer.js] Result from selectFolderFromDrop (triggered by renderer drop):', result);
+    if (result) {
       handleFolderOpen(result);
+    } else {
+      console.error('[renderer.js] selectFolderFromDrop (triggered by renderer drop) returned null or undefined');
     }
   });
 
+  // Listener for the signal from the main process (if we ever revert or need it for another reason)
+  // For now, this is likely redundant with the above drop handler, but kept for completeness.
+  window.electron.onShowFolderDialogFromDrop(async () => {
+    console.log('[renderer.js] Received signal from main process to show folder dialog from drop (redundant path).');
+    const result = await window.electron.selectFolderFromDrop({ signal: 'from-main-process-drop' });
+    console.log('[renderer.js] Result from selectFolderFromDrop (triggered by main):', result);
+    if (result) {
+      handleFolderOpen(result);
+    } else {
+      console.error('[renderer.js] selectFolderFromDrop (triggered by main) returned null or undefined');
+    }
+  });
+  
   hideUnknownCheckbox.addEventListener('change', renderGallery);
   closeBtn.addEventListener('click', closeImageViewer);
   prevBtn.addEventListener('click', showPrevImage);

@@ -21,6 +21,12 @@ body {
   padding: 10px;
 }
 
+#gallery.drag-over {
+  background-color: #e3f2fd;
+  border: 2px dashed #2196F3;
+  transition: all 0.2s ease;
+}
+
 .gallery-item {
   border: 1px solid #ccc;
   padding: 10px;

@@ -17,10 +17,15 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       enableRemoteModule: false,
+      webSecurity: false, // Re-enable to allow renderer to access file.path
+      nodeIntegration: false,
     },
   });
 
   mainWindow.loadFile('index.html');
+
+  // The drop event is now handled by the renderer process to prevent navigation.
+  // The main process no longer needs to listen to the webContents 'drop' event for this.
 }
 
 app.whenReady().then(() => {
@@ -66,40 +71,160 @@ ipcMain.handle('select-folder', async () => {
 });
 
 ipcMain.handle('open-folder', async (event, folderPath) => {
+  console.log('[main.js] open-folder called with:', folderPath);
+  
   if (typeof folderPath !== 'string' || !folderPath) {
-    console.error('Invalid folder path received:', folderPath);
+    console.error('[main.js] Invalid folder path received:', folderPath);
     return null;
   }
 
   try {
     const stats = fs.statSync(folderPath);
-    if (!stats.isDirectory()) {
-      console.log(`Attempted to open a file, not a directory: ${folderPath}`);
-      return null; // Or return an error/specific message
+    console.log('[main.js] Path stats:', { isDirectory: stats.isDirectory(), isFile: stats.isFile() });
+    
+    // If it's a file, use its parent directory
+    let targetPath = folderPath;
+    if (stats.isFile()) {
+      targetPath = path.dirname(folderPath);
+      console.log('[main.js] File dropped, using parent directory:', targetPath);
+    } else if (!stats.isDirectory()) {
+      console.log(`[main.js] Path is neither file nor directory: ${folderPath}`);
+      return null;
     }
+    
+    const files = fs.readdirSync(targetPath).map(file => {
+      const filePath = path.join(targetPath, file);
+      return {
+        name: file,
+        path: filePath,
+        url: url.format({
+          pathname: filePath,
+          protocol: 'file:',
+          slashes: true
+        })
+      };
+    });
+
+    console.log('[main.js] Returning result with', files.length, 'files from', targetPath);
+    
+    return {
+      files,
+      imageExtensions,
+      folderPath: targetPath,
+    };
   } catch (error) {
-    console.error(`Error accessing path: ${folderPath}`, error);
+    console.error(`[main.js] Error accessing path: ${folderPath}`, error);
+    return null;
+  }
+});
+
+ipcMain.handle('select-folder-from-drop', async (event, signalInfo) => {
+  console.log(`[main.js] select-folder-from-drop called with signal:`, signalInfo);
+  
+  let defaultPathForDialog = null;
+  // Check if the renderer sent a path from the drop event
+  if (signalInfo && signalInfo.path && typeof signalInfo.path === 'string') {
+    try {
+      const stats = fs.statSync(signalInfo.path);
+      if (stats.isDirectory()) {
+        defaultPathForDialog = signalInfo.path;
+        console.log(`[main.js] Dropped item is a directory. Setting defaultPath to: ${defaultPathForDialog}`);
+      } else if (stats.isFile()) {
+        defaultPathForDialog = path.dirname(signalInfo.path);
+        console.log(`[main.js] Dropped item is a file. Setting defaultPath to its parent: ${defaultPathForDialog}`);
+      }
+    } catch (error) {
+      console.warn(`[main.js] Could not stat dropped path "${signalInfo.path}". Error: ${error.message}. Dialog will open to last used location.`);
+    }
+  } else {
+    console.log(`[main.js] No valid path provided from renderer. Dialog will open to last used location.`);
+  }
+
+  const dialogOptions = {
+    properties: ['openFile', 'openDirectory'],
+    filters: [
+      { name: 'Images', extensions: imageExtensions },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  };
+
+  if (defaultPathForDialog) {
+    dialogOptions.defaultPath = defaultPathForDialog;
+  }
+
+  const result = await dialog.showOpenDialog(dialogOptions);
+
+  if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+    console.log('[main.js] File/Folder dialog was canceled or no path selected.');
     return null;
   }
 
-  const files = fs.readdirSync(folderPath).map(file => {
-    const filePath = path.join(folderPath, file);
-    return {
-      name: file,
-      path: filePath,
-      url: url.format({
-        pathname: filePath,
-        protocol: 'file:',
-        slashes: true
-      })
-    };
-  });
+  const selectedPath = result.filePaths[0];
+  console.log(`[main.js] Path selected from dialog: ${selectedPath}`);
+  
+  return handleOpenFolderRequest(selectedPath);
+});
 
-  return {
-    files,
-    imageExtensions,
-    folderPath,
-  };
+// Helper function to encapsulate the folder opening logic
+async function handleOpenFolderRequest(folderPath) {
+  console.log('[main.js] handleOpenFolderRequest called with:', folderPath);
+  
+  if (typeof folderPath !== 'string' || !folderPath) {
+    console.error('[main.js] Invalid folder path received:', folderPath);
+    return null;
+  }
+
+  try {
+    const stats = fs.statSync(folderPath);
+    console.log('[main.js] Path stats:', { isDirectory: stats.isDirectory(), isFile: stats.isFile() });
+    
+    let targetPath = folderPath;
+    if (stats.isFile()) {
+      targetPath = path.dirname(folderPath);
+      console.log('[main.js] File dropped, using parent directory:', targetPath);
+    } else if (!stats.isDirectory()) {
+      console.log(`[main.js] Path is neither file nor directory: ${folderPath}`);
+      return null;
+    }
+    
+    const files = fs.readdirSync(targetPath).map(file => {
+      const filePath = path.join(targetPath, file);
+      return {
+        name: file,
+        path: filePath,
+        url: url.format({
+          pathname: filePath,
+          protocol: 'file:',
+          slashes: true
+        })
+      };
+    });
+
+    console.log('[main.js] Returning result with', files.length, 'files from', targetPath);
+    
+    return {
+      files,
+      imageExtensions,
+      folderPath: targetPath,
+    };
+  } catch (error) {
+    console.error(`[main.js] Error accessing path: ${folderPath}`, error);
+    return null;
+  }
+}
+
+ipcMain.handle('get-file-path-from-drop', async (event, dataTransfer) => {
+  console.log('[main.js] get-file-path-from-drop called');
+
+  try {
+    // In the main process, we don't have direct access to the dataTransfer object
+    // from the renderer. We need a different approach.
+    // For now, return null and let the renderer handle it directly
+    return null;
+  } catch (error) {
+    console.error('[main.js] Error in get-file-path-from-drop:', error);
+    return null;
+  }
 });
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
