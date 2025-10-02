@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld('electron', {
   getFilePathFromDrop: (dataTransfer) => ipcRenderer.invoke('get-file-path-from-drop', dataTransfer),
   selectFolderFromDrop: (fileName) => ipcRenderer.invoke('select-folder-from-drop', fileName),
   // Listener for messages from the main process
-  onShowFolderDialogFromDrop: (callback) => ipcRenderer.on('show-folder-dialog-from-drop', callback),
+  onDroppedPathFromMain: (callback) => ipcRenderer.on('dropped-path-from-main', callback),
+  onShowFolderDialogFromDrop: (callback) => ipcRenderer.on('show-folder-dialog-from-drop', callback), // Keep old one for now
 });
 
 // Also expose the handleFolderOpen function for external testing

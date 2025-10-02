@@ -24,8 +24,22 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
-  // The drop event is now handled by the renderer process to prevent navigation.
-  // The main process no longer needs to listen to the webContents 'drop' event for this.
+  // Handle file drop events on the window itself to get file paths securely in the main process.
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.on('drop', (event, filePaths) => {
+      event.preventDefault(); // Crucial: Prevents default navigation behavior.
+      console.log('[main.js] Window drop event detected with paths:', filePaths);
+      
+      if (filePaths && filePaths.length > 0) {
+        const firstPath = filePaths[0];
+        console.log(`[main.js] First dropped path: ${firstPath}. Sending to renderer to open dialog.`);
+        
+        // Send the path to the renderer process. The renderer will then call the IPC
+        // to show the dialog, passing this path to be used as defaultPath.
+        mainWindow.webContents.send('dropped-path-from-main', { path: firstPath });
+      }
+    });
+  });
 }
 
 app.whenReady().then(() => {

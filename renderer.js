@@ -171,44 +171,32 @@ document.addEventListener('DOMContentLoaded', () => {
     e.stopPropagation();
   });
 
-  // Handle the drop event in the renderer to prevent navigation and signal the main process.
-  gallery.addEventListener('drop', async (e) => {
-    e.preventDefault(); // Crucial: Prevents default navigation behavior.
+  // The drop event is now handled by the main process to get file paths securely.
+  // The renderer will listen for a signal from the main process with the path.
+  // We only keep dragover and dragleave for visual feedback.
+  // The drop event itself is not prevented here, allowing it to bubble up to the main process.
+  // However, we still need to prevent default on the gallery to avoid file opening in browser.
+  gallery.addEventListener('drop', (e) => {
+    e.preventDefault(); // Still prevent default to stop browser from trying to open the file.
     e.stopPropagation();
     gallery.classList.remove('drag-over');
-
-    console.log('[renderer.js] Drop event detected on gallery. Preventing navigation and signaling main process.');
-    
-    let droppedItemPath = null;
-    if (e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      // With webSecurity: false, file.path might be available for OS-dragged items.
-      console.log(`[renderer.js] Dropped file name: ${file.name}, path: ${file.path}`);
-      if (file.path && typeof file.path === 'string') {
-        droppedItemPath = file.path;
-      }
-    }
-
-    // Signal the main process to show the dialog, passing the path if available.
-    const result = await window.electron.selectFolderFromDrop({ action: 'drop-signaled', path: droppedItemPath });
-    console.log('[renderer.js] Result from selectFolderFromDrop (triggered by renderer drop):', result);
-    if (result) {
-      handleFolderOpen(result);
-    } else {
-      console.error('[renderer.js] selectFolderFromDrop (triggered by renderer drop) returned null or undefined');
-    }
+    // The main process will handle the actual logic via its own 'drop' event listener.
+    console.log('[renderer.js] Drop event on gallery. Default prevented, bubbling to main process.');
   });
 
-  // Listener for the signal from the main process (if we ever revert or need it for another reason)
-  // For now, this is likely redundant with the above drop handler, but kept for completeness.
-  window.electron.onShowFolderDialogFromDrop(async () => {
-    console.log('[renderer.js] Received signal from main process to show folder dialog from drop (redundant path).');
-    const result = await window.electron.selectFolderFromDrop({ signal: 'from-main-process-drop' });
-    console.log('[renderer.js] Result from selectFolderFromDrop (triggered by main):', result);
-    if (result) {
-      handleFolderOpen(result);
+  // Listen for the dropped path from the main process.
+  window.electron.onDroppedPathFromMain(async (event, pathInfo) => {
+    console.log('[renderer.js] Received dropped-path-from-main with info:', pathInfo);
+    if (pathInfo && pathInfo.path) {
+      const result = await window.electron.selectFolderFromDrop({ path: pathInfo.path });
+      console.log('[renderer.js] Result from selectFolderFromDrop (with path from main):', result);
+      if (result) {
+        handleFolderOpen(result);
+      } else {
+        console.error('[renderer.js] selectFolderFromDrop (with path from main) returned null or undefined');
+      }
     } else {
-      console.error('[renderer.js] selectFolderFromDrop (triggered by main) returned null or undefined');
+      console.error('[renderer.js] No path in dropped-path-from-main signal.');
     }
   });
   
