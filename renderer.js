@@ -151,10 +151,23 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (e.dataTransfer.files.length > 0) {
-      const folderPath = e.dataTransfer.files[0].path;
-      const result = await window.electron.openFolder(folderPath);
-      loadFolderContents(result);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      let folderPath = '';
+      // Iterate over the files to find the first valid path
+      for (const file of files) {
+        if (file.path) {
+          folderPath = file.path;
+          break; // Use the first valid path found
+        }
+      }
+
+      if (folderPath) {
+        const result = await window.electron.openFolder(folderPath);
+        loadFolderContents(result);
+      } else {
+        console.error('No valid path found in dropped items.');
+      }
     }
   });
 
