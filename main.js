@@ -45,6 +45,30 @@ ipcMain.handle('select-folder', async () => {
   }
 
   const folderPath = result.filePaths[0];
+  return handleOpenFolder(folderPath);
+});
+
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  return handleOpenFolder(folderPath);
+});
+
+function handleOpenFolder(folderPath) {
+  if (!folderPath || typeof folderPath !== 'string') {
+    console.log('Invalid folder path received.');
+    return null;
+  }
+
+  try {
+    const stats = fs.statSync(folderPath);
+    if (!stats.isDirectory()) {
+      console.log(`Path is not a directory: ${folderPath}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error accessing path: ${folderPath}`, error);
+    return null;
+  }
+
   const files = fs.readdirSync(folderPath).map(file => {
     const filePath = path.join(folderPath, file);
     return {
@@ -63,7 +87,7 @@ ipcMain.handle('select-folder', async () => {
     imageExtensions,
     folderPath,
   };
-});
+}
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
     if (cache.has(filePath)) {

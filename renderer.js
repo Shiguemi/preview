@@ -124,18 +124,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  selectFolderBtn.addEventListener('click', async () => {
-    const result = await window.electron.selectFolder();
+  const loadFolderContents = (result) => {
     if (result && result.files) {
       files = result.files;
       imageExtensions = result.imageExtensions || [];
       currentFolder.textContent = result.folderPath.split(/[\\/]/).pop();
       renderGallery();
 
-      // Preload all images in the background
       const imageFiles = getImageFiles();
       const imagePaths = imageFiles.map(file => file.path);
       window.electron.preloadImages(imagePaths);
+    }
+  };
+
+  selectFolderBtn.addEventListener('click', async () => {
+    const result = await window.electron.selectFolder();
+    loadFolderContents(result);
+  });
+
+  document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.dataTransfer.files.length > 0) {
+      const folderPath = e.dataTransfer.files[0].path;
+      const result = await window.electron.openFolder(folderPath);
+      loadFolderContents(result);
     }
   });
 
