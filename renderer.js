@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (e.dataTransfer.files.length > 0) {
+    if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].path) {
       const folderPath = e.dataTransfer.files[0].path;
       const result = await window.electron.openFolder(folderPath);
       handleFolderOpen(result);

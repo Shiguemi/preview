@@ -66,6 +66,11 @@ ipcMain.handle('select-folder', async () => {
 });
 
 ipcMain.handle('open-folder', async (event, folderPath) => {
+  if (typeof folderPath !== 'string' || !folderPath) {
+    console.error('Invalid folder path received:', folderPath);
+    return null;
+  }
+
   try {
     const stats = fs.statSync(folderPath);
     if (!stats.isDirectory()) {
