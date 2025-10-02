@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
   selectFolder: () => ipcRenderer.invoke('select-folder'),
@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld('electron', {
   getThumbnail: (filePath) => ipcRenderer.invoke('get-thumbnail', filePath),
   getImageData: (filePath) => ipcRenderer.invoke('get-image-data', filePath),
   preloadImages: (filePaths) => ipcRenderer.invoke('preload-images', filePaths),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
 });

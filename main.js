@@ -17,10 +17,20 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       enableRemoteModule: false,
+      nodeIntegration: false,
+      webviewTag: false,
+    },
+    webContents: {
+      enableWebSQL: false,
     },
   });
 
   mainWindow.loadFile('index.html');
+
+  // Enable file path access for drag and drop
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+  });
 }
 
 app.whenReady().then(() => {

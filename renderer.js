@@ -151,22 +151,23 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     e.stopPropagation();
 
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      let folderPath = '';
-      // Iterate over the files to find the first valid path
-      for (const file of files) {
-        if (file.path) {
-          folderPath = file.path;
-          break; // Use the first valid path found
-        }
-      }
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      const firstFile = droppedFiles[0];
 
-      if (folderPath) {
-        const result = await window.electron.openFolder(folderPath);
-        loadFolderContents(result);
-      } else {
-        console.error('No valid path found in dropped items.');
+      try {
+        // Use webUtils.getPathForFile to get the actual file path
+        const filePath = window.electron.getPathForFile(firstFile);
+        console.log('Dropped file path:', filePath);
+
+        if (filePath) {
+          const result = await window.electron.openFolder(filePath);
+          loadFolderContents(result);
+        } else {
+          console.error('Could not get path from dropped file');
+        }
+      } catch (error) {
+        console.error('Error processing dropped file:', error);
       }
     }
   });
