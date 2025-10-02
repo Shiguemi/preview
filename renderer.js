@@ -124,18 +124,51 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  selectFolderBtn.addEventListener('click', async () => {
-    const result = await window.electron.selectFolder();
+  const loadFolderContents = (result) => {
     if (result && result.files) {
       files = result.files;
       imageExtensions = result.imageExtensions || [];
       currentFolder.textContent = result.folderPath.split(/[\\/]/).pop();
       renderGallery();
 
-      // Preload all images in the background
       const imageFiles = getImageFiles();
       const imagePaths = imageFiles.map(file => file.path);
       window.electron.preloadImages(imagePaths);
+    }
+  };
+
+  selectFolderBtn.addEventListener('click', async () => {
+    const result = await window.electron.selectFolder();
+    loadFolderContents(result);
+  });
+
+  document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      const firstFile = droppedFiles[0];
+
+      try {
+        // Use webUtils.getPathForFile to get the actual file path
+        const filePath = window.electron.getPathForFile(firstFile);
+        console.log('Dropped file path:', filePath);
+
+        if (filePath) {
+          const result = await window.electron.openFolder(filePath);
+          loadFolderContents(result);
+        } else {
+          console.error('Could not get path from dropped file');
+        }
+      } catch (error) {
+        console.error('Error processing dropped file:', error);
+      }
     }
   });
 

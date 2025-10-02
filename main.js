@@ -17,10 +17,20 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       enableRemoteModule: false,
+      nodeIntegration: false,
+      webviewTag: false,
+    },
+    webContents: {
+      enableWebSQL: false,
     },
   });
 
   mainWindow.loadFile('index.html');
+
+  // Enable file path access for drag and drop
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+  });
 }
 
 app.whenReady().then(() => {
@@ -45,6 +55,33 @@ ipcMain.handle('select-folder', async () => {
   }
 
   const folderPath = result.filePaths[0];
+  return handleOpenFolder(folderPath);
+});
+
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  return handleOpenFolder(folderPath);
+});
+
+function handleOpenFolder(itemPath) {
+  if (!itemPath || typeof itemPath !== 'string') {
+    console.log('Invalid folder path received.');
+    return null;
+  }
+
+  let folderPath = itemPath;
+  try {
+    const stats = fs.statSync(itemPath);
+    if (stats.isFile()) {
+      folderPath = path.dirname(itemPath);
+    } else if (!stats.isDirectory()) {
+      console.log(`Path is not a directory or file: ${itemPath}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error accessing path: ${itemPath}`, error);
+    return null;
+  }
+
   const files = fs.readdirSync(folderPath).map(file => {
     const filePath = path.join(folderPath, file);
     return {
@@ -63,7 +100,7 @@ ipcMain.handle('select-folder', async () => {
     imageExtensions,
     folderPath,
   };
-});
+}
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
     if (cache.has(filePath)) {
