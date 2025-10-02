@@ -52,20 +52,23 @@ ipcMain.handle('open-folder', async (event, folderPath) => {
   return handleOpenFolder(folderPath);
 });
 
-function handleOpenFolder(folderPath) {
-  if (!folderPath || typeof folderPath !== 'string') {
+function handleOpenFolder(itemPath) {
+  if (!itemPath || typeof itemPath !== 'string') {
     console.log('Invalid folder path received.');
     return null;
   }
 
+  let folderPath = itemPath;
   try {
-    const stats = fs.statSync(folderPath);
-    if (!stats.isDirectory()) {
-      console.log(`Path is not a directory: ${folderPath}`);
+    const stats = fs.statSync(itemPath);
+    if (stats.isFile()) {
+      folderPath = path.dirname(itemPath);
+    } else if (!stats.isDirectory()) {
+      console.log(`Path is not a directory or file: ${itemPath}`);
       return null;
     }
   } catch (error) {
-    console.error(`Error accessing path: ${folderPath}`, error);
+    console.error(`Error accessing path: ${itemPath}`, error);
     return null;
   }
 
