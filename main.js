@@ -45,7 +45,7 @@ app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
 });
 
-ipcMain.handle('select-folder', async () => {
+ipcMain.handle('select-folder', async (event, recursive = false) => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
   });
@@ -55,14 +55,49 @@ ipcMain.handle('select-folder', async () => {
   }
 
   const folderPath = result.filePaths[0];
-  return handleOpenFolder(folderPath);
+  return handleOpenFolder(folderPath, recursive);
 });
 
-ipcMain.handle('open-folder', async (event, folderPath) => {
-  return handleOpenFolder(folderPath);
+ipcMain.handle('open-folder', async (event, folderPath, recursive = false) => {
+  return handleOpenFolder(folderPath, recursive);
 });
 
-function handleOpenFolder(itemPath) {
+function readFilesRecursively(dirPath, baseDir = dirPath) {
+  let results = [];
+
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+
+      if (entry.isDirectory()) {
+        // Recursively read subdirectories
+        results = results.concat(readFilesRecursively(fullPath, baseDir));
+      } else {
+        // Add file with relative path from base directory
+        const relativePath = path.relative(baseDir, dirPath);
+        const displayName = relativePath ? path.join(relativePath, entry.name) : entry.name;
+
+        results.push({
+          name: displayName,
+          path: fullPath,
+          url: url.format({
+            pathname: fullPath,
+            protocol: 'file:',
+            slashes: true
+          })
+        });
+      }
+    }
+  } catch (error) {
+    console.error(`Error reading directory: ${dirPath}`, error);
+  }
+
+  return results;
+}
+
+function handleOpenFolder(itemPath, recursive = false) {
   if (!itemPath || typeof itemPath !== 'string') {
     console.log('Invalid folder path received.');
     return null;
@@ -82,18 +117,24 @@ function handleOpenFolder(itemPath) {
     return null;
   }
 
-  const files = fs.readdirSync(folderPath).map(file => {
-    const filePath = path.join(folderPath, file);
-    return {
-      name: file,
-      path: filePath,
-      url: url.format({
-        pathname: filePath,
-        protocol: 'file:',
-        slashes: true
-      })
-    };
-  });
+  let files;
+
+  if (recursive) {
+    files = readFilesRecursively(folderPath);
+  } else {
+    files = fs.readdirSync(folderPath).map(file => {
+      const filePath = path.join(folderPath, file);
+      return {
+        name: file,
+        path: filePath,
+        url: url.format({
+          pathname: filePath,
+          protocol: 'file:',
+          slashes: true
+        })
+      };
+    });
+  }
 
   return {
     files,

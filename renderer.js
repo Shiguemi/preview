@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectFolderBtn = document.getElementById('select-folder-btn');
   const gallery = document.getElementById('gallery');
   const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
+  const recursiveCheckbox = document.getElementById('recursive-checkbox');
   const zoomSlider = document.getElementById('zoom-slider');
   const currentFolder = document.getElementById('current-folder');
   const imageViewer = document.getElementById('image-viewer');
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let isDragging = false;
   let startDragX = 0;
   let startDragY = 0;
+  let currentFolderPath = null;
 
   const DEFAULT_THUMBNAIL_SIZE = 150;
   let thumbnailSize = DEFAULT_THUMBNAIL_SIZE;
@@ -128,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (result && result.files) {
       files = result.files;
       imageExtensions = result.imageExtensions || [];
+      currentFolderPath = result.folderPath;
       currentFolder.textContent = result.folderPath.split(/[\\/]/).pop();
       renderGallery();
 
@@ -138,7 +141,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   selectFolderBtn.addEventListener('click', async () => {
-    const result = await window.electron.selectFolder();
+    const recursive = recursiveCheckbox.checked;
+    const result = await window.electron.selectFolder(recursive);
     loadFolderContents(result);
   });
 
@@ -161,7 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Dropped file path:', filePath);
 
         if (filePath) {
-          const result = await window.electron.openFolder(filePath);
+          const recursive = recursiveCheckbox.checked;
+          const result = await window.electron.openFolder(filePath, recursive);
           loadFolderContents(result);
         } else {
           console.error('Could not get path from dropped file');
@@ -173,6 +178,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   hideUnknownCheckbox.addEventListener('change', renderGallery);
+
+  recursiveCheckbox.addEventListener('change', async () => {
+    if (currentFolderPath) {
+      const recursive = recursiveCheckbox.checked;
+      const result = await window.electron.openFolder(currentFolderPath, recursive);
+      loadFolderContents(result);
+    }
+  });
+
   closeBtn.addEventListener('click', closeImageViewer);
   prevBtn.addEventListener('click', showPrevImage);
   nextBtn.addEventListener('click', showNextImage);
@@ -264,21 +278,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  window.addEventListener('wheel', (e) => {
-    if (imageViewer.classList.contains('visible') || !e.target.closest('#gallery')) {
-      return;
-    }
-
-    e.preventDefault();
-    const zoomFactor = 10;
-    if (e.deltaY < 0) {
-      thumbnailSize += zoomFactor;
-    } else {
-      thumbnailSize = Math.max(50, thumbnailSize - zoomFactor); // Prevents thumbnails from becoming too small
-    }
-    zoomSlider.value = thumbnailSize;
-    updateThumbnailSize();
-  });
 
   zoomSlider.addEventListener('input', (e) => {
     thumbnailSize = parseInt(e.target.value, 10);
