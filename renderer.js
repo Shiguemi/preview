@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isImage && !item.dataset.loaded) {
             item.dataset.loaded = 'true';
             const img = item.querySelector('img');
+            const spinner = item.querySelector('.loading-spinner');
 
             window.electron.getThumbnail(filePath).then(thumbnailUrl => {
               if (thumbnailUrl) {
@@ -144,10 +145,32 @@ document.addEventListener('DOMContentLoaded', () => {
               } else {
                 img.src = fileUrl;
               }
+
+              // Remove spinner and show image with animation
+              img.onload = () => {
+                if (spinner) spinner.remove();
+                img.classList.add('loaded');
+
+                // Remove brightness filter after flash animation
+                setTimeout(() => {
+                  img.style.filter = 'brightness(1)';
+                }, 230);
+              };
+
               updateProgress();
             }).catch(error => {
               console.error('Error getting thumbnail:', error);
               img.src = fileUrl;
+
+              // Remove spinner on error too
+              img.onload = () => {
+                if (spinner) spinner.remove();
+                img.classList.add('loaded');
+                setTimeout(() => {
+                  img.style.filter = 'brightness(1)';
+                }, 230);
+              };
+
               updateProgress();
             });
           } else if (!isImage) {
@@ -178,9 +201,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isImage) {
         imageFileIndex++;
         const currentIndex = imageFileIndex;
+
+        // Create loading spinner
+        const spinner = document.createElement('i');
+        spinner.className = 'bi bi-arrow-clockwise loading-spinner';
+        item.appendChild(spinner);
+
+        // Create image element (hidden initially)
         const img = document.createElement('img');
-        img.style.backgroundColor = '#f0f0f0'; // Placeholder background
         item.appendChild(img);
+
         item.addEventListener('click', () => openImageViewer(currentIndex));
       } else {
         const icon = document.createElement('div');

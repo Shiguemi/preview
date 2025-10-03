@@ -60,11 +60,56 @@ body {
 
 .gallery-item {
   text-align: center;
+  position: relative;
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .gallery-item img {
   max-width: 100%;
   height: auto;
+  opacity: 0;
+  transition: filter 50ms ease-out;
+}
+
+.gallery-item img.loaded {
+  animation: fadeIn 180ms ease-out forwards, brightFlash 50ms 180ms ease-out;
+}
+
+.loading-spinner {
+  position: absolute;
+  font-size: 32px;
+  color: #007bff;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes brightFlash {
+  0% {
+    filter: brightness(1);
+  }
+  100% {
+    filter: brightness(1.4);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .file-icon {
