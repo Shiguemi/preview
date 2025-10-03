@@ -3,21 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <title>File Preview</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- <h1>File Preview</h1> -->
   <div class="toolbar">
-    <button id="select-folder-btn">Select Folder</button>
-    <input type="checkbox" id="hide-unknown-checkbox" checked>
-    <label for="hide-unknown-checkbox">Hide unknown</label>
-    <input type="checkbox" id="recursive-checkbox">
-    <label for="recursive-checkbox">Recursive</label>
+    <button id="select-folder-btn" class="icon-btn" title="Select folder to preview">
+      <i class="bi bi-folder2-open"></i>
+    </button>
+    <button id="hide-unknown-btn" class="icon-btn toggle-btn active" title="Hide unknown file types" data-active="true">
+      <i class="bi bi-eye-slash-fill"></i>
+    </button>
+    <button id="recursive-btn" class="icon-btn toggle-btn" title="Enable recursive folder scanning" data-active="false">
+      <i class="bi bi-arrow-repeat"></i>
+    </button>
     <input type="range" id="zoom-slider" min="50" max="300" value="150">
-    <span id="progress-indicator"></span>
     <span id="current-folder"></span>
   </div>
   <div id="gallery"></div>
+
+  <button id="progress-float-btn" class="progress-float-btn" style="display: none;">
+    <i class="bi bi-hourglass-split"></i>
+    <span id="progress-text">0%</span>
+  </button>
 
   <div id="image-viewer" class="modal">
     <span class="close-btn">&times;</span>

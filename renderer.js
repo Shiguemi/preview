@@ -1,10 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
   const selectFolderBtn = document.getElementById('select-folder-btn');
   const gallery = document.getElementById('gallery');
-  const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
-  const recursiveCheckbox = document.getElementById('recursive-checkbox');
+  const hideUnknownBtn = document.getElementById('hide-unknown-btn');
+  const recursiveBtn = document.getElementById('recursive-btn');
   const zoomSlider = document.getElementById('zoom-slider');
-  const progressIndicator = document.getElementById('progress-indicator');
+  const progressFloatBtn = document.getElementById('progress-float-btn');
+  const progressText = document.getElementById('progress-text');
   const currentFolder = document.getElementById('current-folder');
   const imageViewer = document.getElementById('image-viewer');
   const fullImage = document.getElementById('full-image');
@@ -86,15 +87,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const renderGallery = () => {
     updateThumbnailSize();
     gallery.innerHTML = '';
-    progressIndicator.textContent = '';
     loadedThumbnailsCount = 0;
+
+    // Show progress button
+    progressFloatBtn.style.display = 'flex';
+    progressFloatBtn.classList.remove('hidden');
 
     // Disconnect previous observer if exists
     if (thumbnailObserver) {
       thumbnailObserver.disconnect();
     }
 
-    const hideUnknown = hideUnknownCheckbox.checked;
+    const hideUnknown = hideUnknownBtn.dataset.active === 'true';
     const imageFiles = getImageFiles();
     let imageFileIndex = -1;
 
@@ -109,12 +113,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateProgress = () => {
       loadedThumbnailsCount++;
       const percentage = Math.round((loadedThumbnailsCount / totalCount) * 100);
-      progressIndicator.textContent = `${percentage}% (${loadedThumbnailsCount}/${totalCount})`;
+      progressText.textContent = `${percentage}% (${loadedThumbnailsCount}/${totalCount})`;
 
       if (loadedThumbnailsCount === totalCount) {
         setTimeout(() => {
-          progressIndicator.textContent = '';
-        }, 2000);
+          progressFloatBtn.classList.add('hidden');
+          setTimeout(() => {
+            progressFloatBtn.style.display = 'none';
+          }, 300);
+        }, 3000);
       }
     };
 
@@ -202,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   selectFolderBtn.addEventListener('click', async () => {
-    const recursive = recursiveCheckbox.checked;
+    const recursive = recursiveBtn.dataset.active === 'true';
     const result = await window.electron.selectFolder(recursive);
     loadFolderContents(result);
   });
@@ -226,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Dropped file path:', filePath);
 
         if (filePath) {
-          const recursive = recursiveCheckbox.checked;
+          const recursive = recursiveBtn.dataset.active === 'true';
           const result = await window.electron.openFolder(filePath, recursive);
           loadFolderContents(result);
         } else {
@@ -238,11 +245,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  hideUnknownCheckbox.addEventListener('change', renderGallery);
+  hideUnknownBtn.addEventListener('click', () => {
+    const isActive = hideUnknownBtn.dataset.active === 'true';
+    hideUnknownBtn.dataset.active = !isActive;
+    hideUnknownBtn.classList.toggle('active');
 
-  recursiveCheckbox.addEventListener('change', async () => {
+    // Update icon
+    const icon = hideUnknownBtn.querySelector('i');
+    if (!isActive) {
+      icon.className = 'bi bi-eye-slash-fill';
+      hideUnknownBtn.title = 'Hide unknown file types';
+    } else {
+      icon.className = 'bi bi-eye-fill';
+      hideUnknownBtn.title = 'Show all file types';
+    }
+
+    renderGallery();
+  });
+
+  recursiveBtn.addEventListener('click', async () => {
+    const isActive = recursiveBtn.dataset.active === 'true';
+    recursiveBtn.dataset.active = !isActive;
+    recursiveBtn.classList.toggle('active');
+
+    // Update icon and tooltip
+    const icon = recursiveBtn.querySelector('i');
+    if (!isActive) {
+      icon.className = 'bi bi-arrow-repeat';
+      recursiveBtn.title = 'Disable recursive folder scanning';
+    } else {
+      icon.className = 'bi bi-arrow-repeat';
+      recursiveBtn.title = 'Enable recursive folder scanning';
+    }
+
+    // Reload folder if one is already loaded
     if (currentFolderPath) {
-      const recursive = recursiveCheckbox.checked;
+      const recursive = recursiveBtn.dataset.active === 'true';
       const result = await window.electron.openFolder(currentFolderPath, recursive);
       loadFolderContents(result);
     }
