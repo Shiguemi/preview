@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const menuOpenFolderBtn = document.getElementById('menu-open-folder');
   const recentFoldersList = document.getElementById('recent-folders-list');
   const menuExitBtn = document.getElementById('menu-exit');
+  const menuShortcutsBtn = document.getElementById('menu-shortcuts');
+  const shortcutsModal = document.getElementById('shortcuts-modal');
+  const closeShortcutsBtn = document.querySelector('.close-shortcuts-btn');
 
   let files = [];
   let imageExtensions = [];
@@ -463,6 +466,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Menu exit button
   menuExitBtn.addEventListener('click', () => {
     window.electron.quitApp();
+  });
+
+  // Menu shortcuts button
+  menuShortcutsBtn.addEventListener('click', () => {
+    shortcutsModal.classList.add('visible');
+  });
+
+  // Close shortcuts modal
+  closeShortcutsBtn.addEventListener('click', () => {
+    shortcutsModal.classList.remove('visible');
+  });
+
+  // Close shortcuts modal when clicking outside
+  shortcutsModal.addEventListener('click', (e) => {
+    if (e.target === shortcutsModal) {
+      shortcutsModal.classList.remove('visible');
+    }
   });
 
   // Keyboard shortcut: Ctrl+Q to quit

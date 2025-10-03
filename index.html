@@ -26,6 +26,15 @@
         </div>
       </div>
     </div>
+    <div class="menu-item">
+      <span class="menu-label">Help</span>
+      <div class="dropdown-menu">
+        <div class="menu-option" id="menu-shortcuts">
+          <i class="bi bi-keyboard"></i>
+          <span>Keyboard Shortcuts</span>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="toolbar">
     <button id="select-folder-btn" class="icon-btn" title="Select folder to preview">
@@ -52,6 +61,84 @@
     <img class="modal-content" id="full-image">
     <a class="prev-btn">&#10094;</a>
     <a class="next-btn">&#10095;</a>
+  </div>
+
+  <div id="shortcuts-modal" class="modal">
+    <div class="shortcuts-content">
+      <div class="shortcuts-header">
+        <h2>Keyboard Shortcuts & Mouse Actions</h2>
+        <span class="close-shortcuts-btn">&times;</span>
+      </div>
+      <div class="shortcuts-body">
+        <div class="shortcuts-section">
+          <h3><i class="bi bi-keyboard"></i> Keyboard Shortcuts</h3>
+          <div class="shortcut-list">
+            <div class="shortcut-item">
+              <span class="shortcut-key">Ctrl + Q</span>
+              <span class="shortcut-desc">Exit application</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">0</span>
+              <span class="shortcut-desc">Reset thumbnail zoom to default (150px)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="shortcuts-section">
+          <h3><i class="bi bi-card-image"></i> Image Viewer Shortcuts</h3>
+          <div class="shortcut-list">
+            <div class="shortcut-item">
+              <span class="shortcut-key">←</span>
+              <span class="shortcut-desc">Previous image</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">→</span>
+              <span class="shortcut-desc">Next image</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">Esc</span>
+              <span class="shortcut-desc">Close image viewer</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key">0</span>
+              <span class="shortcut-desc">Reset image zoom and position</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="shortcuts-section">
+          <h3><i class="bi bi-mouse"></i> Mouse Actions</h3>
+          <div class="shortcut-list">
+            <div class="shortcut-item">
+              <span class="shortcut-key"><i class="bi bi-folder"></i> Drag & Drop</span>
+              <span class="shortcut-desc">Drag a folder into the application to open it</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key"><i class="bi bi-mouse"></i> Scroll Wheel</span>
+              <span class="shortcut-desc">Zoom in/out on image (in image viewer)</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key"><i class="bi bi-mouse"></i> Click & Drag</span>
+              <span class="shortcut-desc">Pan zoomed image (when zoomed in)</span>
+            </div>
+            <div class="shortcut-item">
+              <span class="shortcut-key"><i class="bi bi-mouse"></i> Click Thumbnail</span>
+              <span class="shortcut-desc">Open image in full viewer</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="shortcuts-section">
+          <h3><i class="bi bi-sliders"></i> Toolbar Actions</h3>
+          <div class="shortcut-list">
+            <div class="shortcut-item">
+              <span class="shortcut-key"><i class="bi bi-sliders"></i> Zoom Slider</span>
+              <span class="shortcut-desc">Adjust thumbnail size (50-300px)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="renderer.js"></script>
