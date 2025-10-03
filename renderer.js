@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentFolderPath = null;
   let thumbnailObserver = null;
   let loadedThumbnailsCount = 0;
+  let progressHideTimeout = null;
 
   const DEFAULT_THUMBNAIL_SIZE = 150;
   let thumbnailSize = DEFAULT_THUMBNAIL_SIZE;
@@ -95,9 +96,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     gallery.innerHTML = '';
     loadedThumbnailsCount = 0;
 
-    // Show progress button
+    // Clear any pending hide timeout
+    if (progressHideTimeout) {
+      clearTimeout(progressHideTimeout);
+      progressHideTimeout = null;
+    }
+
+    // Reset and show progress button
     progressFloatBtn.style.display = 'flex';
     progressFloatBtn.classList.remove('hidden');
+    progressText.textContent = '0% (0/0)';
 
     // Disconnect previous observer if exists
     if (thumbnailObserver) {
@@ -116,16 +124,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const totalCount = filesToDisplay.length;
 
+    // Hide progress button immediately if no files to display
+    if (totalCount === 0) {
+      progressFloatBtn.classList.add('hidden');
+      progressFloatBtn.style.display = 'none';
+      return;
+    }
+
     const updateProgress = () => {
       loadedThumbnailsCount++;
       const percentage = Math.round((loadedThumbnailsCount / totalCount) * 100);
       progressText.textContent = `${percentage}% (${loadedThumbnailsCount}/${totalCount})`;
 
       if (loadedThumbnailsCount === totalCount) {
-        setTimeout(() => {
+        // Clear any existing timeout before setting a new one
+        if (progressHideTimeout) {
+          clearTimeout(progressHideTimeout);
+        }
+
+        progressHideTimeout = setTimeout(() => {
           progressFloatBtn.classList.add('hidden');
           setTimeout(() => {
             progressFloatBtn.style.display = 'none';
+            progressHideTimeout = null;
           }, 300);
         }, 3000);
       }
