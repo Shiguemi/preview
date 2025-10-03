@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let startDragX = 0;
   let startDragY = 0;
   let currentFolderPath = null;
+  let thumbnailObserver = null;
+  let loadedThumbnailsCount = 0;
 
   const DEFAULT_THUMBNAIL_SIZE = 150;
   let thumbnailSize = DEFAULT_THUMBNAIL_SIZE;
@@ -81,10 +83,16 @@ document.addEventListener('DOMContentLoaded', () => {
     openImageViewer(prevIndex);
   };
 
-  const renderGallery = async () => {
+  const renderGallery = () => {
     updateThumbnailSize();
     gallery.innerHTML = '';
     progressIndicator.textContent = '';
+    loadedThumbnailsCount = 0;
+
+    // Disconnect previous observer if exists
+    if (thumbnailObserver) {
+      thumbnailObserver.disconnect();
+    }
 
     const hideUnknown = hideUnknownCheckbox.checked;
     const imageFiles = getImageFiles();
@@ -96,21 +104,59 @@ document.addEventListener('DOMContentLoaded', () => {
       return !hideUnknown || isImage;
     });
 
-    let loadedCount = 0;
     const totalCount = filesToDisplay.length;
 
     const updateProgress = () => {
-      loadedCount++;
-      const percentage = Math.round((loadedCount / totalCount) * 100);
-      progressIndicator.textContent = `${percentage}% (${loadedCount}/${totalCount})`;
+      loadedThumbnailsCount++;
+      const percentage = Math.round((loadedThumbnailsCount / totalCount) * 100);
+      progressIndicator.textContent = `${percentage}% (${loadedThumbnailsCount}/${totalCount})`;
 
-      if (loadedCount === totalCount) {
+      if (loadedThumbnailsCount === totalCount) {
         setTimeout(() => {
           progressIndicator.textContent = '';
         }, 2000);
       }
     };
 
+    // Create Intersection Observer for lazy loading
+    thumbnailObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const item = entry.target;
+          const filePath = item.dataset.filePath;
+          const fileUrl = item.dataset.fileUrl;
+          const isImage = item.dataset.isImage === 'true';
+
+          if (isImage && !item.dataset.loaded) {
+            item.dataset.loaded = 'true';
+            const img = item.querySelector('img');
+
+            window.electron.getThumbnail(filePath).then(thumbnailUrl => {
+              if (thumbnailUrl) {
+                img.src = thumbnailUrl;
+              } else {
+                img.src = fileUrl;
+              }
+              updateProgress();
+            }).catch(error => {
+              console.error('Error getting thumbnail:', error);
+              img.src = fileUrl;
+              updateProgress();
+            });
+          } else if (!isImage) {
+            updateProgress();
+          }
+
+          thumbnailObserver.unobserve(item);
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '200px',
+      threshold: 0.01
+    });
+
+    // Create gallery items
     for (const file of filesToDisplay) {
       const extension = file.name.split('.').pop().toLowerCase();
       const isImage = imageExtensions.includes(extension);
@@ -118,25 +164,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const item = document.createElement('div');
       item.className = 'gallery-item';
       item.title = file.name;
+      item.dataset.filePath = file.path;
+      item.dataset.fileUrl = file.url;
+      item.dataset.isImage = isImage;
 
       if (isImage) {
         imageFileIndex++;
         const currentIndex = imageFileIndex;
         const img = document.createElement('img');
-
-        window.electron.getThumbnail(file.path).then(thumbnailUrl => {
-          if (thumbnailUrl) {
-            img.src = thumbnailUrl;
-          } else {
-            img.src = file.url;
-          }
-          updateProgress();
-        }).catch(error => {
-          console.error('Error getting thumbnail:', error);
-          img.src = file.url;
-          updateProgress();
-        });
-
+        img.style.backgroundColor = '#f0f0f0'; // Placeholder background
         item.appendChild(img);
         item.addEventListener('click', () => openImageViewer(currentIndex));
       } else {
@@ -144,10 +180,10 @@ document.addEventListener('DOMContentLoaded', () => {
         icon.className = 'file-icon';
         icon.textContent = extension.toUpperCase();
         item.appendChild(icon);
-        updateProgress();
       }
 
       gallery.appendChild(item);
+      thumbnailObserver.observe(item);
     }
   };
 
