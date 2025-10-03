@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('electron', {
   getImageData: (filePath) => ipcRenderer.invoke('get-image-data', filePath),
   preloadImages: (filePaths) => ipcRenderer.invoke('preload-images', filePaths),
   getPathForFile: (file) => webUtils.getPathForFile(file),
+  getRecentFolders: () => ipcRenderer.invoke('get-recent-folders'),
+  onRecentFoldersUpdated: (callback) => ipcRenderer.on('recent-folders-updated', (event, folders) => callback(folders)),
 });

@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const selectFolderBtn = document.getElementById('select-folder-btn');
   const gallery = document.getElementById('gallery');
   const hideUnknownBtn = document.getElementById('hide-unknown-btn');
@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeBtn = document.querySelector('.close-btn');
   const prevBtn = document.querySelector('.prev-btn');
   const nextBtn = document.querySelector('.next-btn');
+  const menuOpenFolderBtn = document.getElementById('menu-open-folder');
+  const recentFoldersList = document.getElementById('recent-folders-list');
 
   let files = [];
   let imageExtensions = [];
@@ -412,4 +414,56 @@ document.addEventListener('DOMContentLoaded', () => {
     thumbnailSize = parseInt(e.target.value, 10);
     updateThumbnailSize();
   });
+
+  // Recent folders menu functionality
+  const updateRecentFoldersMenu = async () => {
+    const recentFolders = await window.electron.getRecentFolders();
+    recentFoldersList.innerHTML = '';
+
+    if (recentFolders.length === 0) {
+      const emptyItem = document.createElement('div');
+      emptyItem.className = 'menu-option disabled';
+      emptyItem.textContent = 'No recent folders';
+      recentFoldersList.appendChild(emptyItem);
+    } else {
+      recentFolders.forEach(folderPath => {
+        const item = document.createElement('div');
+        item.className = 'menu-option recent-folder-item';
+
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-folder';
+
+        const folderName = folderPath.split(/[\\/]/).pop() || folderPath;
+        const span = document.createElement('span');
+        span.textContent = folderName;
+        span.title = folderPath;
+
+        item.appendChild(icon);
+        item.appendChild(span);
+
+        item.addEventListener('click', async () => {
+          const recursive = recursiveBtn.dataset.active === 'true';
+          const result = await window.electron.openFolder(folderPath, recursive);
+          loadFolderContents(result);
+        });
+
+        recentFoldersList.appendChild(item);
+      });
+    }
+  };
+
+  // Menu open folder button
+  menuOpenFolderBtn.addEventListener('click', async () => {
+    const recursive = recursiveBtn.dataset.active === 'true';
+    const result = await window.electron.selectFolder(recursive);
+    loadFolderContents(result);
+  });
+
+  // Listen for recent folders updates
+  window.electron.onRecentFoldersUpdated((folders) => {
+    updateRecentFoldersMenu();
+  });
+
+  // Load initial recent folders
+  updateRecentFoldersMenu();
 });

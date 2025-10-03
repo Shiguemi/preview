@@ -7,7 +7,20 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- <h1>File Preview</h1> -->
+  <div class="menubar">
+    <div class="menu-item">
+      <span class="menu-label">File</span>
+      <div class="dropdown-menu">
+        <div class="menu-option" id="menu-open-folder">
+          <i class="bi bi-folder2-open"></i>
+          <span>Open Folder...</span>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-section-label">Recent Folders</div>
+        <div id="recent-folders-list"></div>
+      </div>
+    </div>
+  </div>
   <div class="toolbar">
     <button id="select-folder-btn" class="icon-btn" title="Select folder to preview">
       <i class="bi bi-folder2-open"></i>

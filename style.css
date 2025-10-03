@@ -3,6 +3,95 @@ body {
   margin: 0;
 }
 
+.menubar {
+  display: flex;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  padding: 0;
+  user-select: none;
+}
+
+.menu-item {
+  position: relative;
+}
+
+.menu-label {
+  display: block;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+}
+
+.menu-label:hover {
+  background-color: #e0e0e0;
+}
+
+.menu-item:hover .dropdown-menu {
+  display: block;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  min-width: 250px;
+  z-index: 1000;
+}
+
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s;
+}
+
+.menu-option:hover {
+  background-color: #f0f0f0;
+}
+
+.menu-option.disabled {
+  color: #999;
+  cursor: default;
+}
+
+.menu-option.disabled:hover {
+  background-color: transparent;
+}
+
+.menu-option i {
+  font-size: 16px;
+  width: 16px;
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: #e0e0e0;
+  margin: 4px 0;
+}
+
+.menu-section-label {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: #666;
+  font-weight: 600;
+  background-color: #f9f9f9;
+}
+
+.recent-folder-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
