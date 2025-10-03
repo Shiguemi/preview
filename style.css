@@ -31,6 +31,10 @@ body {
   display: block;
 }
 
+.menu-item.force-hide-menu:hover .dropdown-menu {
+  display: none;
+}
+
 .dropdown-menu {
   display: none;
   position: absolute;

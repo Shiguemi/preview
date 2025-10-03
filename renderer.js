@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const menuShortcutsBtn = document.getElementById('menu-shortcuts');
   const shortcutsModal = document.getElementById('shortcuts-modal');
   const closeShortcutsBtn = document.querySelector('.close-shortcuts-btn');
+  const fileMenuItem = document.getElementById('file-menu-item');
 
   let files = [];
   let imageExtensions = [];
@@ -467,6 +468,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         item.appendChild(span);
 
         item.addEventListener('click', async () => {
+          // Hide the menu immediately
+          fileMenuItem.classList.add('force-hide-menu');
+          setTimeout(() => {
+            fileMenuItem.classList.remove('force-hide-menu');
+          }, 100);
+
           const recursive = recursiveBtn.dataset.active === 'true';
           const result = await window.electron.openFolder(folderPath, recursive);
           loadFolderContents(result);
