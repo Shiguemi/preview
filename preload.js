@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('electron', {
   getPathForFile: (file) => webUtils.getPathForFile(file),
   getRecentFolders: () => ipcRenderer.invoke('get-recent-folders'),
   onRecentFoldersUpdated: (callback) => ipcRenderer.on('recent-folders-updated', (event, folders) => callback(folders)),
+  quitApp: () => ipcRenderer.invoke('quit-app'),
 });

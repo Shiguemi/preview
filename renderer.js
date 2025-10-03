@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const nextBtn = document.querySelector('.next-btn');
   const menuOpenFolderBtn = document.getElementById('menu-open-folder');
   const recentFoldersList = document.getElementById('recent-folders-list');
+  const menuExitBtn = document.getElementById('menu-exit');
 
   let files = [];
   let imageExtensions = [];
@@ -457,6 +458,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const recursive = recursiveBtn.dataset.active === 'true';
     const result = await window.electron.selectFolder(recursive);
     loadFolderContents(result);
+  });
+
+  // Menu exit button
+  menuExitBtn.addEventListener('click', () => {
+    window.electron.quitApp();
+  });
+
+  // Keyboard shortcut: Ctrl+Q to quit
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+      e.preventDefault();
+      window.electron.quitApp();
+    }
   });
 
   // Listen for recent folders updates

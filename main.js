@@ -332,3 +332,7 @@ ipcMain.handle('preload-images', async (event, filePaths) => {
 ipcMain.handle('get-recent-folders', () => {
     return recentFolders;
 });
+
+ipcMain.handle('quit-app', () => {
+    app.quit();
+});
