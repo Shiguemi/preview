@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
   const recursiveCheckbox = document.getElementById('recursive-checkbox');
   const zoomSlider = document.getElementById('zoom-slider');
+  const progressIndicator = document.getElementById('progress-indicator');
   const currentFolder = document.getElementById('current-folder');
   const imageViewer = document.getElementById('image-viewer');
   const fullImage = document.getElementById('full-image');
@@ -80,20 +81,39 @@ document.addEventListener('DOMContentLoaded', () => {
     openImageViewer(prevIndex);
   };
 
-  const renderGallery = () => {
+  const renderGallery = async () => {
     updateThumbnailSize();
     gallery.innerHTML = '';
+    progressIndicator.textContent = '';
+
     const hideUnknown = hideUnknownCheckbox.checked;
     const imageFiles = getImageFiles();
     let imageFileIndex = -1;
 
-    files.forEach(file => {
+    const filesToDisplay = files.filter(file => {
       const extension = file.name.split('.').pop().toLowerCase();
       const isImage = imageExtensions.includes(extension);
+      return !hideUnknown || isImage;
+    });
 
-      if (hideUnknown && !isImage) {
-        return;
+    let loadedCount = 0;
+    const totalCount = filesToDisplay.length;
+
+    const updateProgress = () => {
+      loadedCount++;
+      const percentage = Math.round((loadedCount / totalCount) * 100);
+      progressIndicator.textContent = `${percentage}% (${loadedCount}/${totalCount})`;
+
+      if (loadedCount === totalCount) {
+        setTimeout(() => {
+          progressIndicator.textContent = '';
+        }, 2000);
       }
+    };
+
+    for (const file of filesToDisplay) {
+      const extension = file.name.split('.').pop().toLowerCase();
+      const isImage = imageExtensions.includes(extension);
 
       const item = document.createElement('div');
       item.className = 'gallery-item';
@@ -103,16 +123,20 @@ document.addEventListener('DOMContentLoaded', () => {
         imageFileIndex++;
         const currentIndex = imageFileIndex;
         const img = document.createElement('img');
+
         window.electron.getThumbnail(file.path).then(thumbnailUrl => {
           if (thumbnailUrl) {
             img.src = thumbnailUrl;
           } else {
             img.src = file.url;
           }
+          updateProgress();
         }).catch(error => {
-            console.error('Error getting thumbnail:', error);
-            img.src = file.url;
+          console.error('Error getting thumbnail:', error);
+          img.src = file.url;
+          updateProgress();
         });
+
         item.appendChild(img);
         item.addEventListener('click', () => openImageViewer(currentIndex));
       } else {
@@ -120,10 +144,11 @@ document.addEventListener('DOMContentLoaded', () => {
         icon.className = 'file-icon';
         icon.textContent = extension.toUpperCase();
         item.appendChild(icon);
+        updateProgress();
       }
 
       gallery.appendChild(item);
-    });
+    }
   };
 
   const loadFolderContents = (result) => {
