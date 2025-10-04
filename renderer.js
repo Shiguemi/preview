@@ -133,9 +133,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     gallery.appendChild(gallerySentinel);
   };
 
-  const appendFilesToGallery = (fileBatch) => {
+  const appendFilesToGallery = (fileBatch, imageFileIndex = 0) => {
     const hideUnknown = hideUnknownBtn.dataset.active === 'true';
-    let imageFileIndex = getImageFiles().length;
 
     const filesToDisplay = fileBatch.filter(file => {
       const extension = file.name.split('.').pop().toLowerCase();
@@ -228,8 +227,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   window.electron.onFolderScanUpdate((fileBatch) => {
     isRequestingFiles = false;
+    const imageFileCountBeforeBatch = getImageFiles().length;
     files.push(...fileBatch);
-    appendFilesToGallery(fileBatch);
+    appendFilesToGallery(fileBatch, imageFileCountBeforeBatch);
     requestMoreFilesIfNeeded();
   });
 
@@ -268,6 +268,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  const renderGallery = () => {
+    gallery.innerHTML = ''; // Clear the gallery
+    gallery.appendChild(gallerySentinel);
+    appendFilesToGallery(files);
+  };
+
   hideUnknownBtn.addEventListener('click', () => {
     const isActive = hideUnknownBtn.dataset.active === 'true';
     hideUnknownBtn.dataset.active = !isActive;
@@ -304,8 +310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Reload folder if one is already loaded
     if (currentFolderPath) {
       const recursive = recursiveBtn.dataset.active === 'true';
-      const result = await window.electron.openFolder(currentFolderPath, recursive);
-      loadFolderContents(result);
+      window.electron.openFolder(currentFolderPath, recursive);
     }
   });
 
@@ -440,8 +445,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }, 100);
 
           const recursive = recursiveBtn.dataset.active === 'true';
-          const result = await window.electron.openFolder(folderPath, recursive);
-          loadFolderContents(result);
+          window.electron.openFolder(folderPath, recursive);
         });
 
         recentFoldersList.appendChild(item);
@@ -452,8 +456,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Menu open folder button
   menuOpenFolderBtn.addEventListener('click', async () => {
     const recursive = recursiveBtn.dataset.active === 'true';
-    const result = await window.electron.selectFolder(recursive);
-    loadFolderContents(result);
+    window.electron.selectFolder(recursive);
   });
 
   // Menu exit button
