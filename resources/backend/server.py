@@ -106,26 +106,28 @@ def convert_exr():
             print('[SERVER] Error: no data', flush=True)
             return jsonify({'success': False, 'error': 'No data provided'}), 400
 
+        file_path = data.get('file_path')
+        if not file_path:
+            print('[SERVER] Error: file_path not provided', flush=True)
+            return jsonify({'success': False, 'error': 'file_path is required'}), 400
+
         max_size = data.get('max_size', 800)
         gamma = data.get('gamma', 2.2)
 
-        print(f'[SERVER] Parameters: max_size={max_size}, gamma={gamma}', flush=True)
+        print(f'[SERVER] Parameters: file_path={file_path}, max_size={max_size}, gamma={gamma}', flush=True)
 
-        # Check if we received file data (base64) - this is the preferred method
-        if 'file_data' in data:
-            print('[SERVER] Received file as base64 data', flush=True)
-            file_base64 = data['file_data']
-            file_bytes = base64.b64decode(file_base64)
-            print(f'[SERVER] Decoded {len(file_bytes)} bytes', flush=True)
+        # Read EXR directly from disk using OpenCV
+        print(f'[SERVER] Reading EXR from disk with OpenCV: {file_path}...', flush=True)
+        img_array = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
 
-            # Read EXR from memory using OpenCV
-            print('[SERVER] Reading EXR from memory with OpenCV...', flush=True)
-            img_array = exr_from_bytes(file_bytes)
-            print(f'[SERVER] EXR loaded from memory, shape: {img_array.shape}, dtype: {img_array.dtype}', flush=True)
+        if img_array is None:
+            raise RuntimeError(f'OpenCV failed to read or decode EXR image at: {file_path}')
 
-        else:
-            print('[SERVER] Error: file_data not provided', flush=True)
-            return jsonify({'success': False, 'error': 'file_data is required'}), 400
+        print(f'[SERVER] EXR loaded from disk, shape: {img_array.shape}, dtype: {img_array.dtype}', flush=True)
+
+        # OpenCV loads in BGR, convert to RGB if it's a color image
+        if len(img_array.shape) == 3 and img_array.shape[2] in [3, 4]:
+             img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
         # Apply gamma correction
         print('[SERVER] Applying gamma correction...', flush=True)

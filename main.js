@@ -171,24 +171,24 @@ ipcMain.handle('open-folder', async (event, folderPath, recursive = false) => {
   return handleOpenFolder(folderPath, recursive);
 });
 
-function readFilesRecursively(dirPath, baseDir = dirPath) {
-  let results = [];
+// This function will be asynchronous and stream files to the renderer
+async function streamFilesRecursively(dirPath, baseDir = dirPath) {
+  const BATCH_SIZE = 50;
+  let fileBatch = [];
 
   try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
-        // Recursively read subdirectories
-        results = results.concat(readFilesRecursively(fullPath, baseDir));
+        await streamFilesRecursively(fullPath, baseDir);
       } else {
-        // Add file with relative path from base directory
         const relativePath = path.relative(baseDir, dirPath);
         const displayName = relativePath ? path.join(relativePath, entry.name) : entry.name;
 
-        results.push({
+        fileBatch.push({
           name: displayName,
           path: fullPath,
           url: url.format({
@@ -197,41 +197,57 @@ function readFilesRecursively(dirPath, baseDir = dirPath) {
             slashes: true
           })
         });
+
+        if (fileBatch.length >= BATCH_SIZE) {
+          mainWindow.webContents.send('folder-scan-update', fileBatch);
+          fileBatch = [];
+        }
       }
+    }
+    // Send any remaining files in the last batch
+    if (fileBatch.length > 0) {
+      mainWindow.webContents.send('folder-scan-update', fileBatch);
     }
   } catch (error) {
     console.error(`Error reading directory: ${dirPath}`, error);
+    mainWindow.webContents.send('folder-scan-error', error.message);
   }
-
-  return results;
 }
 
-function handleOpenFolder(itemPath, recursive = false) {
+async function handleOpenFolder(itemPath, recursive = false) {
   if (!itemPath || typeof itemPath !== 'string') {
     console.log('Invalid folder path received.');
-    return null;
+    return; // No return value
   }
 
   let folderPath = itemPath;
   try {
-    const stats = fs.statSync(itemPath);
+    const stats = await fs.promises.stat(itemPath);
     if (stats.isFile()) {
       folderPath = path.dirname(itemPath);
     } else if (!stats.isDirectory()) {
       console.log(`Path is not a directory or file: ${itemPath}`);
-      return null;
+      return;
     }
   } catch (error) {
     console.error(`Error accessing path: ${itemPath}`, error);
-    return null;
+    return;
   }
 
-  let files;
+  // Add to recent folders
+  addToRecentFolders(folderPath);
+
+  // Immediately notify the renderer that a folder has been opened
+  mainWindow.webContents.send('folder-opened', {
+    folderPath,
+    imageExtensions,
+  });
 
   if (recursive) {
-    files = readFilesRecursively(folderPath);
+    await streamFilesRecursively(folderPath);
+    mainWindow.webContents.send('folder-scan-complete');
   } else {
-    files = fs.readdirSync(folderPath).map(file => {
+    const files = (await fs.promises.readdir(folderPath)).map(file => {
       const filePath = path.join(folderPath, file);
       return {
         name: file,
@@ -243,16 +259,9 @@ function handleOpenFolder(itemPath, recursive = false) {
         })
       };
     });
+    mainWindow.webContents.send('folder-scan-update', files);
+    mainWindow.webContents.send('folder-scan-complete');
   }
-
-  // Add to recent folders
-  addToRecentFolders(folderPath);
-
-  return {
-    files,
-    imageExtensions,
-    folderPath,
-  };
 }
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {

@@ -351,9 +351,8 @@ class PythonManager {
             throw new Error('Python backend is not ready. Waiting for initialization...');
         }
 
-        const fileBuffer = await fs.promises.readFile(filePath);
         const postData = JSON.stringify({
-            file_data: fileBuffer.toString('base64'),
+            file_path: filePath,
             max_size: maxSize,
             gamma: gamma
         });

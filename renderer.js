@@ -103,140 +103,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     openImageViewer(prevIndex);
   };
 
-  const renderGallery = () => {
-    updateThumbnailSize();
+  const resetGallery = () => {
     gallery.innerHTML = '';
+    files = [];
     loadedThumbnailsCount = 0;
-
-    // Clear any pending hide timeout
-    if (progressHideTimeout) {
-      clearTimeout(progressHideTimeout);
-      progressHideTimeout = null;
-    }
-
-    // Reset and show progress button
-    progressFloatBtn.style.display = 'flex';
-    progressFloatBtn.classList.remove('hidden');
-    progressText.textContent = '0% (0/0)';
-
-    // Disconnect previous observer if exists
     if (thumbnailObserver) {
       thumbnailObserver.disconnect();
     }
+    // Setup the observer again for the new content
+    setupThumbnailObserver();
+  };
 
+  const appendFilesToGallery = (fileBatch) => {
     const hideUnknown = hideUnknownBtn.dataset.active === 'true';
     const imageFiles = getImageFiles();
-    let imageFileIndex = -1;
+    let imageFileIndex = imageFiles.length - 1; // Start index from current count
 
-    const filesToDisplay = files.filter(file => {
+    const filesToDisplay = fileBatch.filter(file => {
       const extension = file.name.split('.').pop().toLowerCase();
       const isImage = imageExtensions.includes(extension);
       return !hideUnknown || isImage;
     });
 
-    const totalCount = filesToDisplay.length;
-
-    // Hide progress button immediately if no files to display
-    if (totalCount === 0) {
-      progressFloatBtn.classList.add('hidden');
-      progressFloatBtn.style.display = 'none';
-      return;
-    }
-
-    const updateProgress = () => {
-      loadedThumbnailsCount++;
-      const percentage = Math.round((loadedThumbnailsCount / totalCount) * 100);
-      progressText.textContent = `${percentage}% (${loadedThumbnailsCount}/${totalCount})`;
-
-      if (loadedThumbnailsCount === totalCount) {
-        // Clear any existing timeout before setting a new one
-        if (progressHideTimeout) {
-          clearTimeout(progressHideTimeout);
-        }
-
-        progressHideTimeout = setTimeout(() => {
-          progressFloatBtn.classList.add('hidden');
-          setTimeout(() => {
-            progressFloatBtn.style.display = 'none';
-            progressHideTimeout = null;
-          }, 300);
-        }, 3000);
-      }
-    };
-
-    // Create Intersection Observer for lazy loading
-    thumbnailObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const item = entry.target;
-          const filePath = item.dataset.filePath;
-          const fileUrl = item.dataset.fileUrl;
-          const isImage = item.dataset.isImage === 'true';
-
-          if (isImage && !item.dataset.loaded) {
-            item.dataset.loaded = 'true';
-            const img = item.querySelector('img');
-            const spinner = item.querySelector('.loading-spinner');
-
-            console.log(`[Renderer] Requesting thumbnail for: ${filePath}`);
-            window.electron.getThumbnail(filePath).then(thumbnailUrl => {
-              if (thumbnailUrl) {
-                console.log(`[Renderer] Thumbnail received for: ${filePath}, size: ${thumbnailUrl.length} chars`);
-                img.src = thumbnailUrl;
-              } else {
-                console.warn(`[Renderer] No thumbnail for: ${filePath}, using original URL`);
-                img.src = fileUrl;
-              }
-
-              // Remove spinner and show image with animation
-              img.onload = () => {
-                if (spinner) spinner.remove();
-                img.classList.add('loaded');
-                item.classList.remove('placeholder'); // Remove placeholder style
-
-                // Remove brightness filter after flash animation
-                setTimeout(() => {
-                  img.style.filter = 'brightness(1)';
-                }, 230);
-              };
-
-              updateProgress();
-            }).catch(error => {
-              console.error('Error getting thumbnail:', error);
-              img.src = fileUrl;
-
-              // Remove spinner on error too
-              img.onload = () => {
-                if (spinner) spinner.remove();
-                img.classList.add('loaded');
-                item.classList.remove('placeholder'); // Also remove on error
-                setTimeout(() => {
-                  img.style.filter = 'brightness(1)';
-                }, 230);
-              };
-
-              updateProgress();
-            }).catch(error => {
-              console.error(`[Renderer] Error getting thumbnail for: ${filePath}`, error);
-              img.src = fileUrl;
-              if (spinner) spinner.remove();
-              img.classList.add('loaded');
-              item.classList.remove('placeholder'); // Also remove on error
-            });
-          } else if (!isImage) {
-            updateProgress();
-          }
-
-          thumbnailObserver.unobserve(item);
-        }
-      });
-    }, {
-      root: null,
-      rootMargin: '200px',
-      threshold: 0.01
-    });
-
-    // Create gallery items
     for (const file of filesToDisplay) {
       const extension = file.name.split('.').pop().toLowerCase();
       const isImage = imageExtensions.includes(extension);
@@ -251,14 +139,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isImage) {
         imageFileIndex++;
         const currentIndex = imageFileIndex;
-        item.classList.add('placeholder'); // Add placeholder class
+        item.classList.add('placeholder');
 
-        // Create loading spinner
         const spinner = document.createElement('i');
         spinner.className = 'bi bi-arrow-clockwise loading-spinner';
         item.appendChild(spinner);
 
-        // Create image element (hidden initially)
         const img = document.createElement('img');
         item.appendChild(img);
 
@@ -275,53 +161,79 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  const loadFolderContents = (result) => {
-    if (result && result.files) {
-      files = result.files;
-      imageExtensions = result.imageExtensions || [];
-      currentFolderPath = result.folderPath;
-      currentFolder.textContent = result.folderPath.split(/[\\/]/).pop();
-      renderGallery();
+  const setupThumbnailObserver = () => {
+    thumbnailObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const item = entry.target;
+          thumbnailObserver.unobserve(item); // Observe only once
 
-      const imageFiles = getImageFiles();
-      const imagePaths = imageFiles.map(file => file.path);
-      window.electron.preloadImages(imagePaths);
-    }
+          const filePath = item.dataset.filePath;
+          const fileUrl = item.dataset.fileUrl;
+          const isImage = item.dataset.isImage === 'true';
+
+          if (isImage && !item.dataset.loaded) {
+            item.dataset.loaded = 'true';
+            const img = item.querySelector('img');
+            const spinner = item.querySelector('.loading-spinner');
+
+            window.electron.getThumbnail(filePath).then(thumbnailUrl => {
+              img.src = thumbnailUrl || fileUrl;
+              img.onload = () => {
+                if (spinner) spinner.remove();
+                img.classList.add('loaded');
+                item.classList.remove('placeholder');
+              };
+            }).catch(error => {
+              console.error(`Error getting thumbnail for ${filePath}:`, error);
+              img.src = fileUrl; // Fallback on error
+              img.onload = () => {
+                if (spinner) spinner.remove();
+                img.classList.add('loaded');
+                item.classList.remove('placeholder');
+              };
+            });
+          }
+        }
+      });
+    }, { rootMargin: '200px' });
   };
 
-  selectFolderBtn.addEventListener('click', async () => {
+  // IPC Listeners for asynchronous folder scanning
+  window.electron.onFolderOpened((data) => {
+    resetGallery();
+    imageExtensions = data.imageExtensions || [];
+    currentFolderPath = data.folderPath;
+    currentFolder.textContent = data.folderPath.split(/[\\/]/).pop();
+    updateThumbnailSize();
+  });
+
+  window.electron.onFolderScanUpdate((fileBatch) => {
+    files.push(...fileBatch);
+    appendFilesToGallery(fileBatch);
+  });
+
+  window.electron.onFolderScanComplete(() => {
+    console.log('Folder scan complete.');
+    // You can add logic here to hide a spinner or show a completion message
+  });
+
+
+  selectFolderBtn.addEventListener('click', () => {
     const recursive = recursiveBtn.dataset.active === 'true';
-    const result = await window.electron.selectFolder(recursive);
-    loadFolderContents(result);
+    window.electron.selectFolder(recursive); // This is now fire-and-forget
   });
 
-  document.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  });
-
-  document.addEventListener('drop', async (e) => {
+  document.addEventListener('drop', (e) => {
     e.preventDefault();
     e.stopPropagation();
 
     const droppedFiles = e.dataTransfer.files;
     if (droppedFiles.length > 0) {
-      const firstFile = droppedFiles[0];
-
-      try {
-        // Use webUtils.getPathForFile to get the actual file path
-        const filePath = window.electron.getPathForFile(firstFile);
-        console.log('Dropped file path:', filePath);
-
-        if (filePath) {
-          const recursive = recursiveBtn.dataset.active === 'true';
-          const result = await window.electron.openFolder(filePath, recursive);
-          loadFolderContents(result);
-        } else {
-          console.error('Could not get path from dropped file');
-        }
-      } catch (error) {
-        console.error('Error processing dropped file:', error);
+      const filePath = droppedFiles[0].path; // Electron provides the path on the File object
+      if (filePath) {
+        const recursive = recursiveBtn.dataset.active === 'true';
+        window.electron.openFolder(filePath, recursive); // Fire-and-forget
       }
     }
   });
