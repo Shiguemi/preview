@@ -6,6 +6,7 @@
   "author": "Leonardo Shiguemi Dinnouti",
   "scripts": {
     "start": "electron-forge start",
+    "start:debug": "electron .",
     "start:test": "electron . --remote-debugging-port=9222",
     "package": "electron-forge package",
     "make": "electron-forge make"
@@ -25,6 +26,7 @@
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
     "exifr": "^7.1.3",
-    "tmp": "^0.2.5"
+    "extract-zip": "^2.0.1",
+    "tar": "^6.2.0"
   }
 }

@@ -3,8 +3,29 @@ const path = require('path');
 const fs = require('fs');
 const url = require('url');
 const exifr = require('exifr');
-const { execFile } = require('child_process');
-const tmp = require('tmp');
+const pythonManager = require('./python-manager');
+
+// Setup logging to file
+const logFile = path.join(app.getPath('userData'), 'debug.log');
+const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+
+// Override console.log and console.error to write to file
+const originalLog = console.log;
+const originalError = console.error;
+
+console.log = (...args) => {
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  logStream.write(`[LOG] ${new Date().toISOString()} ${message}\n`);
+  originalLog.apply(console, args);
+};
+
+console.error = (...args) => {
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  logStream.write(`[ERROR] ${new Date().toISOString()} ${message}\n`);
+  originalError.apply(console, args);
+};
+
+console.log(`=== Application Started - Log file: ${logFile} ===`);
 
 const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'exr'];
 const cache = new Map();
@@ -82,15 +103,43 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
+  // Add keyboard shortcut to toggle DevTools (Ctrl+Shift+D)
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'd') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   // Enable file path access for drag and drop
   mainWindow.webContents.on('will-navigate', (event) => {
     event.preventDefault();
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   loadRecentFolders();
   createWindow();
+
+  // Initialize Python environment in background
+  console.log('=== Starting Python Backend Initialization ===');
+  pythonManager.initialize()
+    .then(() => {
+      console.log('=== Python Backend Ready! ===');
+      // Notify renderer process
+      if (mainWindow) {
+        mainWindow.webContents.send('python-backend-ready');
+      }
+    })
+    .catch(error => {
+      console.error('=== Failed to initialize Python environment ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      // Notify renderer process about error
+      if (mainWindow) {
+        mainWindow.webContents.send('python-backend-error', error.message);
+      }
+    });
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -99,6 +148,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', async () => {
+  await pythonManager.stop();
 });
 
 ipcMain.handle('select-folder', async (event, recursive = false) => {
@@ -223,41 +276,34 @@ ipcMain.handle('get-thumbnail', async (event, filePath) => {
         return null;
     }
 
-    // Handle EXR files by calling the 'convert' command-line tool from ImageMagick.
-    return new Promise((resolve) => {
-        tmp.tmpName({ postfix: '.jpg' }, (err, tmpPath) => {
-            if (err) {
-                console.error('Failed to create temporary file name:', err);
-                return resolve(null);
-            }
+    // Handle EXR files using Python backend
+    try {
+        console.log(`[EXR] Processing thumbnail for: ${filePath}`);
 
-            const command = process.platform === 'win32' ? 'magick' : 'convert';
-            const args = process.platform === 'win32'
-                ? ['convert', filePath, '-gamma', '2.2', '-resize', '800x800', tmpPath]
-                : [filePath, '-gamma', '2.2', '-resize', '800x800', tmpPath];
+        // Wait for Python backend to be ready
+        if (!pythonManager.isReady) {
+            console.log('[EXR] Python backend not ready yet, waiting...');
+            await pythonManager.initialize();
+            console.log('[EXR] Python backend initialized');
+        }
 
-            execFile(command, args, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Error converting EXR file "${filePath}" with command "${command}":`, stderr);
-                    fs.unlink(tmpPath, () => {});
-                    resolve(null);
-                    return;
-                }
+        console.log(`[EXR] Calling convertExr for: ${filePath}`);
+        const thumbnailUrl = await pythonManager.convertExr(filePath, 800, 2.2);
 
-                fs.readFile(tmpPath, (readErr, data) => {
-                    fs.unlink(tmpPath, () => {});
-                    if (readErr) {
-                        console.error('Error reading temporary thumbnail file:', readErr);
-                        resolve(null);
-                        return;
-                    }
-                    const thumbnailUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
-                    cache.set(filePath, thumbnailUrl);
-                    resolve(thumbnailUrl);
-                });
-            });
-        });
-    });
+        if (thumbnailUrl) {
+            console.log(`[EXR] Conversion successful, thumbnail size: ${thumbnailUrl.length} chars`);
+            cache.set(filePath, thumbnailUrl);
+            return thumbnailUrl;
+        } else {
+            console.error(`[EXR] Conversion returned null for: ${filePath}`);
+            return null;
+        }
+    } catch (error) {
+        console.error(`[EXR] Failed to convert EXR file: ${filePath}`);
+        console.error('[EXR] Error details:', error.message);
+        console.error('[EXR] Stack:', error.stack);
+        return null;
+    }
 });
 
 async function loadImageData(filePath) {
@@ -268,48 +314,23 @@ async function loadImageData(filePath) {
 
     const fileExtension = path.extname(filePath).toLowerCase();
 
-    const result = await new Promise((resolve, reject) => {
-        if (fileExtension === '.exr') {
-            tmp.tmpName({ postfix: '.jpg' }, (err, tmpPath) => {
-                if (err) {
-                    console.error('Failed to create temporary file name:', err);
-                    return reject(err);
-                }
+    let result;
 
-                const command = process.platform === 'win32' ? 'magick' : 'convert';
-                const args = process.platform === 'win32'
-                    ? ['convert', filePath, '-gamma', '2.2', tmpPath]
-                    : [filePath, '-gamma', '2.2', tmpPath];
-
-                execFile(command, args, (error, stdout, stderr) => {
-                    if (error) {
-                        console.error(`Error converting EXR file "${filePath}" with command "${command}":`, stderr);
-                        fs.unlink(tmpPath, () => {});
-                        return reject(new Error(`Failed to convert EXR file: ${stderr}`));
-                    }
-
-                    fs.readFile(tmpPath, (readErr, data) => {
-                        fs.unlink(tmpPath, () => {});
-                        if (readErr) {
-                            console.error('Error reading temporary image file:', readErr);
-                            return reject(readErr);
-                        }
-                        resolve(`data:image/jpeg;base64,${data.toString('base64')}`);
-                    });
-                });
-            });
-        } else {
-            fs.readFile(filePath, (err, data) => {
-                if (err) {
-                    console.error('Failed to read image file:', err);
-                    return reject(err);
-                }
-                const extension = fileExtension.substring(1);
-                const mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
-                resolve(`data:${mimeType};base64,${data.toString('base64')}`);
-            });
+    if (fileExtension === '.exr') {
+        // Wait for Python backend to be ready
+        if (!pythonManager.isReady) {
+            console.log('Python backend not ready for full image, waiting...');
+            await pythonManager.initialize();
         }
-    });
+        // Use Python backend for full-size EXR conversion (no resize)
+        result = await pythonManager.convertExr(filePath, null, 2.2);
+    } else {
+        // Handle other image formats
+        const data = await fs.promises.readFile(filePath);
+        const extension = fileExtension.substring(1);
+        const mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+        result = `data:${mimeType};base64,${data.toString('base64')}`;
+    }
 
     cache.set(cacheKey, result);
     return result;
@@ -335,4 +356,11 @@ ipcMain.handle('get-recent-folders', () => {
 
 ipcMain.handle('quit-app', () => {
     app.quit();
+});
+
+ipcMain.handle('get-python-status', () => {
+    return {
+        isReady: pythonManager.isReady,
+        backendUrl: pythonManager.backendUrl
+    };
 });
