@@ -171,7 +171,9 @@ class PythonManager {
                 response.pipe(file);
                 file.on('finish', () => file.close(resolve));
             }).on('error', (err) => {
-                fs.unlink(dest, () => reject(err));
+                file.close(() => {
+                    fs.unlink(dest, () => reject(err));
+                });
             });
         });
     }

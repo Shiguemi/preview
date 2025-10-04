@@ -103,21 +103,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     openImageViewer(prevIndex);
   };
 
+  const gallerySentinel = document.createElement('div');
+  gallerySentinel.id = 'gallery-sentinel';
+  let scanComplete = false;
+  let isRequestingFiles = false;
+
+  const requestMoreFilesIfNeeded = () => {
+    if (scanComplete || isRequestingFiles) return;
+
+    const rect = gallerySentinel.getBoundingClientRect();
+    const isVisible = rect.top <= (window.innerHeight || document.documentElement.clientHeight);
+
+    if (isVisible) {
+      console.log('Sentinel is visible, requesting more files...');
+      isRequestingFiles = true;
+      window.electron.requestMoreFiles();
+    }
+  };
+
   const resetGallery = () => {
     gallery.innerHTML = '';
     files = [];
-    loadedThumbnailsCount = 0;
+    scanComplete = false;
+    isRequestingFiles = false;
     if (thumbnailObserver) {
       thumbnailObserver.disconnect();
     }
-    // Setup the observer again for the new content
     setupThumbnailObserver();
+    gallery.appendChild(gallerySentinel);
   };
 
   const appendFilesToGallery = (fileBatch) => {
     const hideUnknown = hideUnknownBtn.dataset.active === 'true';
-    const imageFiles = getImageFiles();
-    let imageFileIndex = imageFiles.length - 1; // Start index from current count
+    let imageFileIndex = getImageFiles().length;
 
     const filesToDisplay = fileBatch.filter(file => {
       const extension = file.name.split('.').pop().toLowerCase();
@@ -137,8 +155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       item.dataset.isImage = isImage;
 
       if (isImage) {
-        imageFileIndex++;
-        const currentIndex = imageFileIndex;
+        const currentIndex = imageFileIndex++;
         item.classList.add('placeholder');
 
         const spinner = document.createElement('i');
@@ -156,7 +173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         item.appendChild(icon);
       }
 
-      gallery.appendChild(item);
+      gallery.insertBefore(item, gallerySentinel);
       thumbnailObserver.observe(item);
     }
   };
@@ -166,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           const item = entry.target;
-          thumbnailObserver.unobserve(item); // Observe only once
+          thumbnailObserver.unobserve(item);
 
           const filePath = item.dataset.filePath;
           const fileUrl = item.dataset.fileUrl;
@@ -186,7 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               };
             }).catch(error => {
               console.error(`Error getting thumbnail for ${filePath}:`, error);
-              img.src = fileUrl; // Fallback on error
+              img.src = fileUrl;
               img.onload = () => {
                 if (spinner) spinner.remove();
                 img.classList.add('loaded');
@@ -196,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         }
       });
-    }, { rootMargin: '0px 0px 50px 0px' });
+    }, { rootMargin: '300px' });
   };
 
   // IPC Listeners for asynchronous folder scanning
@@ -206,22 +223,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentFolderPath = data.folderPath;
     currentFolder.textContent = data.folderPath.split(/[\\/]/).pop();
     updateThumbnailSize();
+    requestMoreFilesIfNeeded();
   });
 
   window.electron.onFolderScanUpdate((fileBatch) => {
+    isRequestingFiles = false;
     files.push(...fileBatch);
     appendFilesToGallery(fileBatch);
+    requestMoreFilesIfNeeded();
   });
 
   window.electron.onFolderScanComplete(() => {
     console.log('Folder scan complete.');
-    // You can add logic here to hide a spinner or show a completion message
+    isRequestingFiles = false;
+    scanComplete = true;
   });
+
+  window.electron.onFolderScanError((error) => {
+    console.error('File scan error in main process:', error);
+    isRequestingFiles = false;
+    scanComplete = true;
+  });
+
+  window.addEventListener('resize', requestMoreFilesIfNeeded);
+  document.addEventListener('scroll', requestMoreFilesIfNeeded, { passive: true });
 
 
   selectFolderBtn.addEventListener('click', () => {
     const recursive = recursiveBtn.dataset.active === 'true';
-    window.electron.selectFolder(recursive); // This is now fire-and-forget
+    window.electron.selectFolder(recursive);
   });
 
   document.addEventListener('drop', (e) => {
@@ -230,10 +260,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const droppedFiles = e.dataTransfer.files;
     if (droppedFiles.length > 0) {
-      const filePath = droppedFiles[0].path; // Electron provides the path on the File object
+      const filePath = droppedFiles[0].path;
       if (filePath) {
         const recursive = recursiveBtn.dataset.active === 'true';
-        window.electron.openFolder(filePath, recursive); // Fire-and-forget
+        window.electron.openFolder(filePath, recursive);
       }
     }
   });

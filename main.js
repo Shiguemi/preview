@@ -152,6 +152,7 @@ app.on('window-all-closed', function () {
 
 app.on('before-quit', async () => {
   await pythonManager.stop();
+  logStream.end();
 });
 
 ipcMain.handle('select-folder', async (event, recursive = false) => {
@@ -171,53 +172,61 @@ ipcMain.handle('open-folder', async (event, folderPath, recursive = false) => {
   return handleOpenFolder(folderPath, recursive);
 });
 
-// This function will be asynchronous and stream files to the renderer
-async function streamFilesRecursively(dirPath, baseDir = dirPath) {
-  const BATCH_SIZE = 50;
-  let fileBatch = [];
+let fileScannerIterator = null; // To hold the state of the file scanning generator
 
-  try {
-    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+// This function is now an async generator, making it pausable
+async function* streamFilesRecursively(dirPath, baseDir = dirPath) {
+    const BATCH_SIZE = 50;
+    let fileBatch = [];
+    let dirs = [dirPath];
 
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
+    while (dirs.length > 0) {
+        const currentDir = dirs.pop();
+        try {
+            const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
 
-      if (entry.isDirectory()) {
-        await streamFilesRecursively(fullPath, baseDir);
-      } else {
-        const relativePath = path.relative(baseDir, dirPath);
-        const displayName = relativePath ? path.join(relativePath, entry.name) : entry.name;
+            for (const entry of entries) {
+                const fullPath = path.join(currentDir, entry.name);
 
-        fileBatch.push({
-          name: displayName,
-          path: fullPath,
-          url: url.format({
-            pathname: fullPath,
-            protocol: 'file:',
-            slashes: true
-          })
-        });
+                if (entry.isDirectory()) {
+                    dirs.push(fullPath);
+                } else {
+                    const relativePath = path.relative(baseDir, currentDir);
+                    const displayName = relativePath ? path.join(relativePath, entry.name) : entry.name;
 
-        if (fileBatch.length >= BATCH_SIZE) {
-          mainWindow.webContents.send('folder-scan-update', fileBatch);
-          fileBatch = [];
+                    fileBatch.push({
+                        name: displayName,
+                        path: fullPath,
+                        url: url.format({
+                            pathname: fullPath,
+                            protocol: 'file:',
+                            slashes: true
+                        })
+                    });
+
+                    if (fileBatch.length >= BATCH_SIZE) {
+                        yield fileBatch;
+                        fileBatch = [];
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error reading directory: ${currentDir}`, error);
+            if (mainWindow) {
+                mainWindow.webContents.send('folder-scan-error', error.message);
+            }
         }
-      }
     }
-    // Send any remaining files in the last batch
+
     if (fileBatch.length > 0) {
-      mainWindow.webContents.send('folder-scan-update', fileBatch);
+        yield fileBatch;
     }
-  } catch (error) {
-    console.error(`Error reading directory: ${dirPath}`, error);
-    mainWindow.webContents.send('folder-scan-error', error.message);
-  }
 }
 
 async function handleOpenFolder(itemPath, recursive = false) {
   if (!itemPath || typeof itemPath !== 'string') {
     console.log('Invalid folder path received.');
-    return; // No return value
+    return;
   }
 
   let folderPath = itemPath;
@@ -234,19 +243,18 @@ async function handleOpenFolder(itemPath, recursive = false) {
     return;
   }
 
-  // Add to recent folders
   addToRecentFolders(folderPath);
 
-  // Immediately notify the renderer that a folder has been opened
   mainWindow.webContents.send('folder-opened', {
     folderPath,
     imageExtensions,
   });
 
   if (recursive) {
-    await streamFilesRecursively(folderPath);
-    mainWindow.webContents.send('folder-scan-complete');
+    // Create the generator but don't start it yet. The renderer will request the first batch.
+    fileScannerIterator = streamFilesRecursively(folderPath);
   } else {
+    // For non-recursive, we can send everything at once as it's usually fast.
     const files = (await fs.promises.readdir(folderPath)).map(file => {
       const filePath = path.join(folderPath, file);
       return {
@@ -263,6 +271,19 @@ async function handleOpenFolder(itemPath, recursive = false) {
     mainWindow.webContents.send('folder-scan-complete');
   }
 }
+
+// New handler to drive the generator
+ipcMain.on('request-more-files', async () => {
+  if (fileScannerIterator) {
+    const result = await fileScannerIterator.next();
+    if (!result.done) {
+      mainWindow.webContents.send('folder-scan-update', result.value);
+    } else {
+      mainWindow.webContents.send('folder-scan-complete');
+      fileScannerIterator = null; // Clean up
+    }
+  }
+});
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
     if (cache.has(filePath)) {

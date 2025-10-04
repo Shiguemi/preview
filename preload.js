@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electron', {
   onFolderScanUpdate: (callback) => ipcRenderer.on('folder-scan-update', (event, files) => callback(files)),
   onFolderScanComplete: (callback) => ipcRenderer.on('folder-scan-complete', callback),
   onFolderScanError: (callback) => ipcRenderer.on('folder-scan-error', (event, error) => callback(error)),
+  requestMoreFiles: () => ipcRenderer.send('request-more-files'),
 
   // Thumbnail and image data
   getThumbnail: (filePath) => ipcRenderer.invoke('get-thumbnail', filePath),
