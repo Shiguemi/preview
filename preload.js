@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld('electron', {
   getRecentFolders: () => ipcRenderer.invoke('get-recent-folders'),
   onRecentFoldersUpdated: (callback) => ipcRenderer.on('recent-folders-updated', (event, folders) => callback(folders)),
   quitApp: () => ipcRenderer.invoke('quit-app'),
+  // Python backend status
+  onPythonBackendReady: (callback) => ipcRenderer.on('python-backend-ready', callback),
+  onPythonBackendError: (callback) => ipcRenderer.on('python-backend-error', (event, error) => callback(error)),
 });

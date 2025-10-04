@@ -1,4 +1,15 @@
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('=== Renderer: DOMContentLoaded ===');
+
+  // Listen for Python backend status
+  window.electron.onPythonBackendReady(() => {
+    console.log('✓ Python backend is ready for EXR conversion!');
+  });
+
+  window.electron.onPythonBackendError((error) => {
+    console.error('✗ Python backend failed to initialize:', error);
+  });
+
   const selectFolderBtn = document.getElementById('select-folder-btn');
   const gallery = document.getElementById('gallery');
   const hideUnknownBtn = document.getElementById('hide-unknown-btn');
@@ -167,10 +178,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const img = item.querySelector('img');
             const spinner = item.querySelector('.loading-spinner');
 
+            console.log(`[Renderer] Requesting thumbnail for: ${filePath}`);
             window.electron.getThumbnail(filePath).then(thumbnailUrl => {
               if (thumbnailUrl) {
+                console.log(`[Renderer] Thumbnail received for: ${filePath}, size: ${thumbnailUrl.length} chars`);
                 img.src = thumbnailUrl;
               } else {
+                console.warn(`[Renderer] No thumbnail for: ${filePath}, using original URL`);
                 img.src = fileUrl;
               }
 
@@ -200,6 +214,11 @@ document.addEventListener('DOMContentLoaded', async () => {
               };
 
               updateProgress();
+            }).catch(error => {
+              console.error(`[Renderer] Error getting thumbnail for: ${filePath}`, error);
+              img.src = fileUrl;
+              if (spinner) spinner.remove();
+              img.classList.add('loaded');
             });
           } else if (!isImage) {
             updateProgress();
