@@ -1,16 +1,24 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const selectFolderBtn = document.getElementById('select-folder-btn');
   const gallery = document.getElementById('gallery');
-  const hideUnknownCheckbox = document.getElementById('hide-unknown-checkbox');
-  const recursiveCheckbox = document.getElementById('recursive-checkbox');
+  const hideUnknownBtn = document.getElementById('hide-unknown-btn');
+  const recursiveBtn = document.getElementById('recursive-btn');
   const zoomSlider = document.getElementById('zoom-slider');
-  const progressIndicator = document.getElementById('progress-indicator');
+  const progressFloatBtn = document.getElementById('progress-float-btn');
+  const progressText = document.getElementById('progress-text');
   const currentFolder = document.getElementById('current-folder');
   const imageViewer = document.getElementById('image-viewer');
   const fullImage = document.getElementById('full-image');
   const closeBtn = document.querySelector('.close-btn');
   const prevBtn = document.querySelector('.prev-btn');
   const nextBtn = document.querySelector('.next-btn');
+  const menuOpenFolderBtn = document.getElementById('menu-open-folder');
+  const recentFoldersList = document.getElementById('recent-folders-list');
+  const menuExitBtn = document.getElementById('menu-exit');
+  const menuShortcutsBtn = document.getElementById('menu-shortcuts');
+  const shortcutsModal = document.getElementById('shortcuts-modal');
+  const closeShortcutsBtn = document.querySelector('.close-shortcuts-btn');
+  const fileMenuItem = document.getElementById('file-menu-item');
 
   let files = [];
   let imageExtensions = [];
@@ -24,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentFolderPath = null;
   let thumbnailObserver = null;
   let loadedThumbnailsCount = 0;
+  let progressHideTimeout = null;
 
   const DEFAULT_THUMBNAIL_SIZE = 150;
   let thumbnailSize = DEFAULT_THUMBNAIL_SIZE;
@@ -86,15 +95,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const renderGallery = () => {
     updateThumbnailSize();
     gallery.innerHTML = '';
-    progressIndicator.textContent = '';
     loadedThumbnailsCount = 0;
+
+    // Clear any pending hide timeout
+    if (progressHideTimeout) {
+      clearTimeout(progressHideTimeout);
+      progressHideTimeout = null;
+    }
+
+    // Reset and show progress button
+    progressFloatBtn.style.display = 'flex';
+    progressFloatBtn.classList.remove('hidden');
+    progressText.textContent = '0% (0/0)';
 
     // Disconnect previous observer if exists
     if (thumbnailObserver) {
       thumbnailObserver.disconnect();
     }
 
-    const hideUnknown = hideUnknownCheckbox.checked;
+    const hideUnknown = hideUnknownBtn.dataset.active === 'true';
     const imageFiles = getImageFiles();
     let imageFileIndex = -1;
 
@@ -106,15 +125,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const totalCount = filesToDisplay.length;
 
+    // Hide progress button immediately if no files to display
+    if (totalCount === 0) {
+      progressFloatBtn.classList.add('hidden');
+      progressFloatBtn.style.display = 'none';
+      return;
+    }
+
     const updateProgress = () => {
       loadedThumbnailsCount++;
       const percentage = Math.round((loadedThumbnailsCount / totalCount) * 100);
-      progressIndicator.textContent = `${percentage}% (${loadedThumbnailsCount}/${totalCount})`;
+      progressText.textContent = `${percentage}% (${loadedThumbnailsCount}/${totalCount})`;
 
       if (loadedThumbnailsCount === totalCount) {
-        setTimeout(() => {
-          progressIndicator.textContent = '';
-        }, 2000);
+        // Clear any existing timeout before setting a new one
+        if (progressHideTimeout) {
+          clearTimeout(progressHideTimeout);
+        }
+
+        progressHideTimeout = setTimeout(() => {
+          progressFloatBtn.classList.add('hidden');
+          setTimeout(() => {
+            progressFloatBtn.style.display = 'none';
+            progressHideTimeout = null;
+          }, 300);
+        }, 3000);
       }
     };
 
@@ -130,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isImage && !item.dataset.loaded) {
             item.dataset.loaded = 'true';
             const img = item.querySelector('img');
+            const spinner = item.querySelector('.loading-spinner');
 
             window.electron.getThumbnail(filePath).then(thumbnailUrl => {
               if (thumbnailUrl) {
@@ -137,10 +173,32 @@ document.addEventListener('DOMContentLoaded', () => {
               } else {
                 img.src = fileUrl;
               }
+
+              // Remove spinner and show image with animation
+              img.onload = () => {
+                if (spinner) spinner.remove();
+                img.classList.add('loaded');
+
+                // Remove brightness filter after flash animation
+                setTimeout(() => {
+                  img.style.filter = 'brightness(1)';
+                }, 230);
+              };
+
               updateProgress();
             }).catch(error => {
               console.error('Error getting thumbnail:', error);
               img.src = fileUrl;
+
+              // Remove spinner on error too
+              img.onload = () => {
+                if (spinner) spinner.remove();
+                img.classList.add('loaded');
+                setTimeout(() => {
+                  img.style.filter = 'brightness(1)';
+                }, 230);
+              };
+
               updateProgress();
             });
           } else if (!isImage) {
@@ -171,9 +229,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isImage) {
         imageFileIndex++;
         const currentIndex = imageFileIndex;
+
+        // Create loading spinner
+        const spinner = document.createElement('i');
+        spinner.className = 'bi bi-arrow-clockwise loading-spinner';
+        item.appendChild(spinner);
+
+        // Create image element (hidden initially)
         const img = document.createElement('img');
-        img.style.backgroundColor = '#f0f0f0'; // Placeholder background
         item.appendChild(img);
+
         item.addEventListener('click', () => openImageViewer(currentIndex));
       } else {
         const icon = document.createElement('div');
@@ -202,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   selectFolderBtn.addEventListener('click', async () => {
-    const recursive = recursiveCheckbox.checked;
+    const recursive = recursiveBtn.dataset.active === 'true';
     const result = await window.electron.selectFolder(recursive);
     loadFolderContents(result);
   });
@@ -226,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Dropped file path:', filePath);
 
         if (filePath) {
-          const recursive = recursiveCheckbox.checked;
+          const recursive = recursiveBtn.dataset.active === 'true';
           const result = await window.electron.openFolder(filePath, recursive);
           loadFolderContents(result);
         } else {
@@ -238,11 +303,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  hideUnknownCheckbox.addEventListener('change', renderGallery);
+  hideUnknownBtn.addEventListener('click', () => {
+    const isActive = hideUnknownBtn.dataset.active === 'true';
+    hideUnknownBtn.dataset.active = !isActive;
+    hideUnknownBtn.classList.toggle('active');
 
-  recursiveCheckbox.addEventListener('change', async () => {
+    // Update icon
+    const icon = hideUnknownBtn.querySelector('i');
+    if (!isActive) {
+      icon.className = 'bi bi-eye-slash-fill';
+      hideUnknownBtn.title = 'Hide unknown file types';
+    } else {
+      icon.className = 'bi bi-eye-fill';
+      hideUnknownBtn.title = 'Show all file types';
+    }
+
+    renderGallery();
+  });
+
+  recursiveBtn.addEventListener('click', async () => {
+    const isActive = recursiveBtn.dataset.active === 'true';
+    recursiveBtn.dataset.active = !isActive;
+    recursiveBtn.classList.toggle('active');
+
+    // Update icon and tooltip
+    const icon = recursiveBtn.querySelector('i');
+    if (!isActive) {
+      icon.className = 'bi bi-arrow-repeat';
+      recursiveBtn.title = 'Disable recursive folder scanning';
+    } else {
+      icon.className = 'bi bi-arrow-repeat';
+      recursiveBtn.title = 'Enable recursive folder scanning';
+    }
+
+    // Reload folder if one is already loaded
     if (currentFolderPath) {
-      const recursive = recursiveCheckbox.checked;
+      const recursive = recursiveBtn.dataset.active === 'true';
       const result = await window.electron.openFolder(currentFolderPath, recursive);
       loadFolderContents(result);
     }
@@ -344,4 +440,92 @@ document.addEventListener('DOMContentLoaded', () => {
     thumbnailSize = parseInt(e.target.value, 10);
     updateThumbnailSize();
   });
+
+  // Recent folders menu functionality
+  const updateRecentFoldersMenu = async () => {
+    const recentFolders = await window.electron.getRecentFolders();
+    recentFoldersList.innerHTML = '';
+
+    if (recentFolders.length === 0) {
+      const emptyItem = document.createElement('div');
+      emptyItem.className = 'menu-option disabled';
+      emptyItem.textContent = 'No recent folders';
+      recentFoldersList.appendChild(emptyItem);
+    } else {
+      recentFolders.forEach(folderPath => {
+        const item = document.createElement('div');
+        item.className = 'menu-option recent-folder-item';
+
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-folder';
+
+        const folderName = folderPath.split(/[\\/]/).pop() || folderPath;
+        const span = document.createElement('span');
+        span.textContent = folderName;
+        span.title = folderPath;
+
+        item.appendChild(icon);
+        item.appendChild(span);
+
+        item.addEventListener('click', async () => {
+          // Hide the menu immediately
+          fileMenuItem.classList.add('force-hide-menu');
+          setTimeout(() => {
+            fileMenuItem.classList.remove('force-hide-menu');
+          }, 100);
+
+          const recursive = recursiveBtn.dataset.active === 'true';
+          const result = await window.electron.openFolder(folderPath, recursive);
+          loadFolderContents(result);
+        });
+
+        recentFoldersList.appendChild(item);
+      });
+    }
+  };
+
+  // Menu open folder button
+  menuOpenFolderBtn.addEventListener('click', async () => {
+    const recursive = recursiveBtn.dataset.active === 'true';
+    const result = await window.electron.selectFolder(recursive);
+    loadFolderContents(result);
+  });
+
+  // Menu exit button
+  menuExitBtn.addEventListener('click', () => {
+    window.electron.quitApp();
+  });
+
+  // Menu shortcuts button
+  menuShortcutsBtn.addEventListener('click', () => {
+    shortcutsModal.classList.add('visible');
+  });
+
+  // Close shortcuts modal
+  closeShortcutsBtn.addEventListener('click', () => {
+    shortcutsModal.classList.remove('visible');
+  });
+
+  // Close shortcuts modal when clicking outside
+  shortcutsModal.addEventListener('click', (e) => {
+    if (e.target === shortcutsModal) {
+      shortcutsModal.classList.remove('visible');
+    }
+  });
+
+  // Keyboard shortcut: Ctrl+Q to quit
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+      e.preventDefault();
+      window.electron.quitApp();
+    }
+  });
+
+  // Listen for recent folders updates
+  window.electron.onRecentFoldersUpdated((folders) => {
+    updateRecentFoldersMenu();
+  });
+
+  // Load initial recent folders
+  updateRecentFoldersMenu();
 });

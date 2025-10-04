@@ -3,6 +3,107 @@ body {
   margin: 0;
 }
 
+.menubar {
+  display: flex;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  padding: 0;
+  user-select: none;
+}
+
+.menu-item {
+  position: relative;
+}
+
+.menu-label {
+  display: block;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+}
+
+.menu-label:hover {
+  background-color: #e0e0e0;
+}
+
+.menu-item:hover .dropdown-menu {
+  display: block;
+}
+
+.menu-item.force-hide-menu:hover .dropdown-menu {
+  display: none;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  min-width: 250px;
+  z-index: 1000;
+}
+
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s;
+  justify-content: space-between;
+}
+
+.menu-option:hover {
+  background-color: #f0f0f0;
+}
+
+.menu-option.disabled {
+  color: #999;
+  cursor: default;
+}
+
+.menu-option.disabled:hover {
+  background-color: transparent;
+}
+
+.menu-option i {
+  font-size: 16px;
+  width: 16px;
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: #e0e0e0;
+  margin: 4px 0;
+}
+
+.menu-section-label {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: #666;
+  font-weight: 600;
+  background-color: #f9f9f9;
+}
+
+.recent-folder-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-shortcut {
+  font-size: 12px;
+  color: #888;
+  margin-left: auto;
+  padding-left: 20px;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -14,6 +115,44 @@ body {
   margin-right: 15px;
 }
 
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px 10px;
+  color: #333;
+  transition: color 0.2s, transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  color: #007bff;
+  transform: scale(1.1);
+}
+
+.icon-btn:active {
+  transform: scale(0.95);
+}
+
+.toggle-btn {
+  color: #999;
+}
+
+.toggle-btn.active {
+  color: #007bff;
+}
+
+.toggle-btn:hover {
+  color: #0056b3;
+}
+
+.toggle-btn:not(.active):hover {
+  color: #666;
+}
+
 #gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -22,11 +161,56 @@ body {
 
 .gallery-item {
   text-align: center;
+  position: relative;
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .gallery-item img {
   max-width: 100%;
   height: auto;
+  opacity: 0;
+  transition: filter 50ms ease-out;
+}
+
+.gallery-item img.loaded {
+  animation: fadeIn 180ms ease-out forwards, brightFlash 50ms 180ms ease-out;
+}
+
+.loading-spinner {
+  position: absolute;
+  font-size: 32px;
+  color: #007bff;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes brightFlash {
+  0% {
+    filter: brightness(1);
+  }
+  100% {
+    filter: brightness(1.4);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .file-icon {
@@ -120,4 +304,151 @@ body {
 .prev-btn:hover,
 .next-btn:hover {
   background-color: rgba(0, 0, 0, 0.8);
+}
+
+.progress-float-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: default;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+.progress-float-btn i {
+  font-size: 18px;
+  animation: rotate 2s linear infinite;
+}
+
+.progress-float-btn.hidden {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.shortcuts-content {
+  position: relative;
+  background-color: white;
+  margin: 5% auto;
+  padding: 0;
+  width: 90%;
+  max-width: 800px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.shortcuts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  border-bottom: 2px solid #e0e0e0;
+  background-color: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+}
+
+.shortcuts-header h2 {
+  margin: 0;
+  font-size: 24px;
+  color: #333;
+}
+
+.close-shortcuts-btn {
+  color: #666;
+  font-size: 32px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: color 0.2s;
+  line-height: 1;
+}
+
+.close-shortcuts-btn:hover {
+  color: #333;
+}
+
+.shortcuts-body {
+  padding: 30px;
+}
+
+.shortcuts-section {
+  margin-bottom: 30px;
+}
+
+.shortcuts-section:last-child {
+  margin-bottom: 0;
+}
+
+.shortcuts-section h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcuts-section h3 i {
+  font-size: 20px;
+  color: #007bff;
+}
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shortcut-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #007bff;
+}
+
+.shortcut-key {
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  color: #333;
+  background-color: #e9ecef;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 80px;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.shortcut-desc {
+  color: #666;
+  font-size: 14px;
+  flex: 1;
+  margin-left: 20px;
 }

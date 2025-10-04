@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const url = require('url');
@@ -8,9 +8,61 @@ const tmp = require('tmp');
 
 const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'exr'];
 const cache = new Map();
+const MAX_RECENT_FOLDERS = 10;
+let recentFolders = [];
+let mainWindow = null;
+
+// Load recent folders from storage
+function loadRecentFolders() {
+  const userDataPath = app.getPath('userData');
+  const recentFoldersPath = path.join(userDataPath, 'recent-folders.json');
+
+  try {
+    if (fs.existsSync(recentFoldersPath)) {
+      const data = fs.readFileSync(recentFoldersPath, 'utf8');
+      recentFolders = JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Error loading recent folders:', error);
+    recentFolders = [];
+  }
+}
+
+// Save recent folders to storage
+function saveRecentFolders() {
+  const userDataPath = app.getPath('userData');
+  const recentFoldersPath = path.join(userDataPath, 'recent-folders.json');
+
+  try {
+    fs.writeFileSync(recentFoldersPath, JSON.stringify(recentFolders, null, 2));
+  } catch (error) {
+    console.error('Error saving recent folders:', error);
+  }
+}
+
+// Add folder to recent list
+function addToRecentFolders(folderPath) {
+  // Remove if already exists
+  recentFolders = recentFolders.filter(f => f !== folderPath);
+
+  // Add to beginning
+  recentFolders.unshift(folderPath);
+
+  // Keep only MAX_RECENT_FOLDERS
+  if (recentFolders.length > MAX_RECENT_FOLDERS) {
+    recentFolders = recentFolders.slice(0, MAX_RECENT_FOLDERS);
+  }
+
+  saveRecentFolders();
+
+  // Notify renderer to update menu
+  if (mainWindow) {
+    mainWindow.webContents.send('recent-folders-updated', recentFolders);
+  }
+}
 
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
@@ -25,6 +77,9 @@ function createWindow() {
     },
   });
 
+  // Remove native menu bar
+  Menu.setApplicationMenu(null);
+
   mainWindow.loadFile('index.html');
 
   // Enable file path access for drag and drop
@@ -34,6 +89,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  loadRecentFolders();
   createWindow();
 
   app.on('activate', function () {
@@ -135,6 +191,9 @@ function handleOpenFolder(itemPath, recursive = false) {
       };
     });
   }
+
+  // Add to recent folders
+  addToRecentFolders(folderPath);
 
   return {
     files,
@@ -268,4 +327,12 @@ ipcMain.handle('preload-images', async (event, filePaths) => {
             console.error(`Failed to preload image: ${filePath}`, error);
         }
     }
+});
+
+ipcMain.handle('get-recent-folders', () => {
+    return recentFolders;
+});
+
+ipcMain.handle('quit-app', () => {
+    app.quit();
 });
