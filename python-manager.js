@@ -4,6 +4,7 @@ const https = require('https');
 const os = require('os');
 const { spawn, execFileSync } = require('child_process');
 const extract = require('extract-zip');
+const tar = require('tar');
 
 // Try to import electron, but don't fail if not available
 let app = null;
@@ -21,8 +22,8 @@ class PythonManager {
             ? app.getPath('userData')
             : path.join(os.homedir(), '.image-preview');
 
+        this.pythonDir = path.join(baseDir, 'python-portable');
         this.venvDir = path.join(baseDir, 'python-venv');
-        this.systemPython = null;
         this.pythonExecutable = null;
         this.backendProcess = null;
         this.backendPort = 5000;
@@ -47,39 +48,44 @@ class PythonManager {
         console.log('Initializing Python environment...');
 
         try {
-            // Find system Python
-            if (!await this.findSystemPython()) {
-                throw new Error('Python 3 not found on system. Please install Python 3.8 or higher.');
+            // Step 1: Check for portable Python, download if not present
+            if (!await this.checkPythonInstalled()) {
+                console.log('Portable Python not found. Downloading...');
+                await this.downloadPython();
+                console.log('Portable Python downloaded and extracted successfully.');
+            } else {
+                console.log('Using existing portable Python installation.');
             }
 
-            console.log('Found system Python:', this.systemPython);
+            // Set executable to the portable python for creating the venv
+            this.setPythonExecutable(false);
 
-            // Check if venv exists and is valid
+            // Step 2: Check if venv exists, create if not
             if (!await this.checkVenvExists()) {
                 console.log('Creating Python virtual environment...');
                 await this.createVenv();
-                console.log('Virtual environment created successfully');
+                console.log('Virtual environment created successfully.');
             } else {
-                console.log('Using existing virtual environment');
+                console.log('Using existing virtual environment.');
             }
 
-            // Set venv Python executable
-            this.setVenvPythonExecutable();
+            // Set executable to the venv python for all subsequent operations
+            this.setPythonExecutable(true);
 
-            // Check if dependencies are installed in venv
+            // Step 3: Check if dependencies are installed, install if not
             if (!await this.checkDependenciesInstalled()) {
                 console.log('Installing Python dependencies in venv...');
                 await this.installDependencies();
-                console.log('Dependencies installed successfully');
+                console.log('Dependencies installed successfully.');
             } else {
-                console.log('Dependencies already installed');
+                console.log('Dependencies already installed.');
             }
 
-            // Start backend server
+            // Step 4: Start the backend server
             await this.startBackend();
 
             this.isReady = true;
-            console.log('Python environment ready');
+            console.log('Python environment ready.');
             return true;
         } catch (error) {
             console.error('Failed to initialize Python environment:', error);
@@ -88,169 +94,47 @@ class PythonManager {
     }
 
     /**
-     * Try to find system Python installation
-     */
-    async findSystemPython() {
-        const pythonCommands = ['python3', 'python'];
-
-        for (const cmd of pythonCommands) {
-            try {
-                const { execSync } = require('child_process');
-                const versionOutput = execSync(`${cmd} --version`, { encoding: 'utf8', stdio: 'pipe' });
-
-                if (versionOutput.includes('Python 3')) {
-                    // Found Python 3, get full path
-                    const whichCmd = process.platform === 'win32' ? 'where' : 'which';
-                    const pythonPath = execSync(`${whichCmd} ${cmd}`, { encoding: 'utf8' })
-                        .trim()
-                        .split('\n')[0]
-                        .replace(/\r/g, ''); // Remove carriage returns
-
-                    this.systemPython = pythonPath;
-                    console.log(`Found system Python: ${pythonPath} (${versionOutput.trim()})`);
-                    return true;
-                }
-            } catch (error) {
-                // Python not found, continue to next command
-                continue;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Check if venv exists
-     */
-    async checkVenvExists() {
-        const platform = process.platform;
-        let venvPythonPath;
-
-        if (platform === 'win32') {
-            venvPythonPath = path.join(this.venvDir, 'Scripts', 'python.exe');
-        } else {
-            venvPythonPath = path.join(this.venvDir, 'bin', 'python');
-        }
-
-        return fs.existsSync(venvPythonPath);
-    }
-
-    /**
-     * Create virtual environment
-     */
-    async createVenv() {
-        // Create parent directory if it doesn't exist
-        const parentDir = path.dirname(this.venvDir);
-        if (!fs.existsSync(parentDir)) {
-            fs.mkdirSync(parentDir, { recursive: true });
-        }
-
-        // Create venv using system Python
-        console.log(`Creating venv at: ${this.venvDir}`);
-        await this.runSystemPythonCommand(['-m', 'venv', this.venvDir]);
-    }
-
-    /**
-     * Set venv Python executable path
-     */
-    setVenvPythonExecutable() {
-        const platform = process.platform;
-
-        if (platform === 'win32') {
-            this.pythonExecutable = path.join(this.venvDir, 'Scripts', 'python.exe');
-        } else {
-            this.pythonExecutable = path.join(this.venvDir, 'bin', 'python');
-        }
-
-        console.log(`Venv Python executable: ${this.pythonExecutable}`);
-    }
-
-    /**
-     * Run command with system Python (not venv)
-     */
-    runSystemPythonCommand(args) {
-        return new Promise((resolve, reject) => {
-            console.log(`[PythonManager] Running system command: ${this.systemPython} ${args.join(' ')}`);
-
-            const childProcess = spawn(this.systemPython, args, {
-                stdio: 'pipe'
-            });
-
-            let stdout = '';
-            let stderr = '';
-
-            childProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-                console.log(`[Python stdout]: ${data.toString()}`);
-            });
-
-            childProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-                console.error(`[Python stderr]: ${data.toString()}`);
-            });
-
-            childProcess.on('close', (code) => {
-                if (code === 0) {
-                    resolve();
-                } else {
-                    console.error(`[PythonManager] Command failed with code ${code}`);
-                    console.error(`[PythonManager] stdout: ${stdout}`);
-                    console.error(`[PythonManager] stderr: ${stderr}`);
-                    reject(new Error(`Python command failed with code ${code}: ${stderr || stdout}`));
-                }
-            });
-
-            childProcess.on('error', (error) => {
-                console.error(`[PythonManager] Process error:`, error);
-                reject(error);
-            });
-        });
-    }
-
-    /**
-     * Check if Python is already installed
+     * Check if the portable Python is already installed
      */
     async checkPythonInstalled() {
         const platform = process.platform;
         let pythonPath;
 
         if (platform === 'win32') {
-            pythonPath = path.join(this.pythonDir, 'python.exe');
+            pythonPath = path.join(this.pythonDir, 'python', 'python.exe');
         } else {
-            pythonPath = path.join(this.pythonDir, 'bin', 'python3');
+            // Linux/macOS standalone build has a 'python' subdirectory
+            pythonPath = path.join(this.pythonDir, 'python', 'bin', 'python3');
         }
 
         return fs.existsSync(pythonPath);
     }
 
     /**
-     * Download Python portable version
+     * Download and extract a portable version of Python
      */
     async downloadPython() {
         const platform = process.platform;
         const arch = process.arch;
+        const version = '3.11.7';
+        const standaloneVersion = '20240107';
 
         let downloadUrl;
-        let fileName;
+        const fileName = 'python-standalone.tar.gz';
+        let osString, archString;
 
-        // Python embeddable package URLs
         if (platform === 'win32') {
-            if (arch === 'x64') {
-                downloadUrl = 'https://www.python.org/ftp/python/3.11.7/python-3.11.7-embed-amd64.zip';
-                fileName = 'python-embed.zip';
-            } else {
-                downloadUrl = 'https://www.python.org/ftp/python/3.11.7/python-3.11.7-embed-win32.zip';
-                fileName = 'python-embed.zip';
-            }
+            osString = 'pc-windows-msvc-shared';
+            archString = arch === 'x64' ? 'x86_64' : 'i686';
         } else if (platform === 'darwin') {
-            // For macOS, we'll use python.org installer or standalone build
-            downloadUrl = 'https://www.python.org/ftp/python/3.11.7/python-3.11.7-macos11.pkg';
-            fileName = 'python.pkg';
+            osString = 'apple-darwin';
+            archString = arch === 'arm64' ? 'aarch64' : 'x86_64';
         } else {
-            // Linux - use python-build-standalone
-            downloadUrl = `https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6+20231002-${arch}-unknown-linux-gnu-install_only.tar.gz`;
-            fileName = 'python.tar.gz';
+            osString = 'unknown-linux-gnu';
+            archString = arch === 'arm64' ? 'aarch64' : 'x86_64';
         }
+
+        downloadUrl = `https://github.com/indygreg/python-build-standalone/releases/download/${standaloneVersion}/cpython-${version}+${standaloneVersion}-${archString}-${osString}-install_only.tar.gz`;
 
         // Create directory if it doesn't exist
         if (!fs.existsSync(this.pythonDir)) {
@@ -259,308 +143,255 @@ class PythonManager {
 
         const downloadPath = path.join(this.pythonDir, fileName);
 
-        // Download file
+        console.log(`Downloading from: ${downloadUrl}`);
         await this.downloadFile(downloadUrl, downloadPath);
+        console.log(`Downloaded to: ${downloadPath}`);
 
-        // Extract
-        if (platform === 'win32') {
-            await extract(downloadPath, { dir: this.pythonDir });
-            // Download get-pip.py for Windows embeddable
-            const getPipUrl = 'https://bootstrap.pypa.io/get-pip.py';
-            const getPipPath = path.join(this.pythonDir, 'get-pip.py');
-            await this.downloadFile(getPipUrl, getPipPath);
-        } else if (platform === 'linux') {
-            // Extract tar.gz
-            await this.extractTarGz(downloadPath, this.pythonDir);
-        }
+        console.log('Extracting...');
+        await tar.x({ file: downloadPath, cwd: this.pythonDir });
+        console.log('Extraction complete.');
 
-        // Clean up download file
+        // Clean up the downloaded archive
         fs.unlinkSync(downloadPath);
     }
 
     /**
-     * Download file from URL
+     * Helper to download a file from a URL
      */
     downloadFile(url, dest) {
         return new Promise((resolve, reject) => {
             const file = fs.createWriteStream(dest);
-
-            https.get(url, (response) => {
-                // Handle redirects
-                if (response.statusCode === 301 || response.statusCode === 302) {
-                    return this.downloadFile(response.headers.location, dest)
-                        .then(resolve)
-                        .catch(reject);
+            https.get(url, { headers: { 'User-Agent': 'Node.js' } }, (response) => {
+                if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                    return this.downloadFile(response.headers.location, dest).then(resolve).catch(reject);
                 }
-
+                if (response.statusCode !== 200) {
+                    return reject(new Error(`Download failed with status code: ${response.statusCode}`));
+                }
                 response.pipe(file);
-
-                file.on('finish', () => {
-                    file.close();
-                    resolve();
-                });
+                file.on('finish', () => file.close(resolve));
             }).on('error', (err) => {
-                fs.unlinkSync(dest);
-                reject(err);
+                fs.unlink(dest, () => reject(err));
             });
         });
     }
 
     /**
-     * Extract tar.gz file (for Linux)
+     * Check if the virtual environment directory exists and is valid
      */
-    async extractTarGz(archivePath, targetDir) {
-        return new Promise((resolve, reject) => {
-            const tar = require('tar');
-            tar.x({
-                file: archivePath,
-                cwd: targetDir
-            }).then(resolve).catch(reject);
-        });
-    }
-
-    /**
-     * Set Python executable path based on platform
-     */
-    setPythonExecutable() {
+    async checkVenvExists() {
         const platform = process.platform;
-
-        if (platform === 'win32') {
-            this.pythonExecutable = path.join(this.pythonDir, 'python.exe');
-        } else if (platform === 'darwin') {
-            this.pythonExecutable = path.join(this.pythonDir, 'bin', 'python3');
-        } else {
-            // Linux - python-build-standalone structure
-            this.pythonExecutable = path.join(this.pythonDir, 'python', 'bin', 'python3');
-        }
+        const venvPythonPath = (platform === 'win32')
+            ? path.join(this.venvDir, 'Scripts', 'python.exe')
+            : path.join(this.venvDir, 'bin', 'python');
+        return fs.existsSync(venvPythonPath);
     }
 
     /**
-     * Check if dependencies are installed
+     * Create the virtual environment using the portable Python
+     */
+    async createVenv() {
+        if (!fs.existsSync(this.venvDir)) {
+            fs.mkdirSync(this.venvDir, { recursive: true });
+        }
+        // Uses the portable python executable set in _doInitialize
+        await this.runPythonCommand(['-m', 'venv', this.venvDir]);
+    }
+
+    /**
+     * Set the pythonExecutable path.
+     * @param {boolean} useVenv - If true, points to the venv executable. Otherwise, points to the portable executable.
+     */
+    setPythonExecutable(useVenv) {
+        const platform = process.platform;
+        if (useVenv) {
+            this.pythonExecutable = (platform === 'win32')
+                ? path.join(this.venvDir, 'Scripts', 'python.exe')
+                : path.join(this.venvDir, 'bin', 'python');
+        } else {
+            this.pythonExecutable = (platform === 'win32')
+                ? path.join(this.pythonDir, 'python', 'python.exe')
+                : path.join(this.pythonDir, 'python', 'bin', 'python3');
+        }
+        console.log(`Python executable set to: ${this.pythonExecutable}`);
+    }
+
+    /**
+     * Check if dependencies (e.g., Flask) are installed in the venv
      */
     async checkDependenciesInstalled() {
         try {
-            const result = execFileSync(this.pythonExecutable, ['-m', 'pip', 'list'], {
-                encoding: 'utf8'
-            });
-
-            // Check if flask is installed
-            return result.includes('Flask');
+            const result = execFileSync(this.pythonExecutable, ['-m', 'pip', 'list'], { encoding: 'utf8' });
+            return result.toLowerCase().includes('flask');
         } catch (error) {
+            console.error('Failed to check dependencies:', error);
             return false;
         }
     }
 
     /**
-     * Install Python dependencies
+     * Install dependencies from requirements.txt into the venv
      */
     async installDependencies() {
         const backendDir = this.getBackendDir();
         const requirementsPath = path.join(backendDir, 'requirements.txt');
-
-        // Install requirements in venv (pip is included by default in venv)
         console.log(`Installing dependencies from: ${requirementsPath}`);
+        // Ensure we're using the venv python for this
+        this.setPythonExecutable(true);
         await this.runPythonCommand(['-m', 'pip', 'install', '--upgrade', 'pip']);
         await this.runPythonCommand(['-m', 'pip', 'install', '-r', requirementsPath]);
     }
 
     /**
-     * Run Python command
+     * Run a Python command with the currently configured pythonExecutable
      */
-    runPythonCommand(args) {
+    runPythonCommand(args, executable = this.pythonExecutable) {
         return new Promise((resolve, reject) => {
-            console.log(`[PythonManager] Running command: ${this.pythonExecutable} ${args.join(' ')}`);
-
-            const childProcess = spawn(this.pythonExecutable, args, {
-                stdio: 'pipe'
-            });
+            console.log(`[PythonManager] Running command: ${executable} ${args.join(' ')}`);
+            const childProcess = spawn(executable, args, { stdio: 'pipe' });
 
             let stdout = '';
             let stderr = '';
-
             childProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-                console.log(`[Python stdout]: ${data.toString()}`);
+                const output = data.toString();
+                stdout += output;
+                console.log(`[Python stdout]: ${output.trim()}`);
             });
-
             childProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-                console.error(`[Python stderr]: ${data.toString()}`);
+                const output = data.toString();
+                stderr += output;
+                console.error(`[Python stderr]: ${output.trim()}`);
             });
 
             childProcess.on('close', (code) => {
                 if (code === 0) {
-                    resolve();
+                    resolve(stdout);
                 } else {
-                    console.error(`[PythonManager] Command failed with code ${code}`);
-                    console.error(`[PythonManager] stdout: ${stdout}`);
-                    console.error(`[PythonManager] stderr: ${stderr}`);
-                    reject(new Error(`Python command failed with code ${code}: ${stderr || stdout}`));
+                    const errorMsg = `Python command failed with code ${code}: ${stderr || stdout}`;
+                    console.error(`[PythonManager] ${errorMsg}`);
+                    reject(new Error(errorMsg));
                 }
             });
 
             childProcess.on('error', (error) => {
-                console.error(`[PythonManager] Process error:`, error);
+                console.error(`[PythonManager] Process spawn error:`, error);
                 reject(error);
             });
         });
     }
 
     /**
-     * Get backend directory path
+     * Get the path to the backend directory
      */
     getBackendDir() {
-        if (app && app.isPackaged) {
-            return path.join(process.resourcesPath, 'backend');
-        } else {
-            return path.join(__dirname, 'resources', 'backend');
-        }
+        const isPackaged = app && app.isPackaged;
+        // In development, __dirname is the project root.
+        // In production, it's in the 'app.asar' archive, so we need process.resourcesPath.
+        const basePath = isPackaged ? process.resourcesPath : __dirname;
+        return path.join(basePath, 'resources', 'backend');
     }
 
     /**
-     * Start backend server
+     * Start the Flask backend server
      */
     async startBackend() {
-        const backendDir = this.getBackendDir();
-        const serverPath = path.join(backendDir, 'server.py');
+        const serverPath = path.join(this.getBackendDir(), 'server.py');
+        console.log(`Starting backend server: ${serverPath}`);
 
-        return new Promise((resolve, reject) => {
-            this.backendProcess = spawn(this.pythonExecutable, [serverPath, String(this.backendPort)], {
-                cwd: backendDir,
-                stdio: ['ignore', 'pipe', 'pipe']
-            });
-
-            this.backendProcess.stdout.on('data', (data) => {
-                console.log(`Python backend: ${data}`);
-            });
-
-            this.backendProcess.stderr.on('data', (data) => {
-                console.error(`Python backend error: ${data}`);
-            });
-
-            this.backendProcess.on('error', (error) => {
-                console.error('Failed to start backend:', error);
-                reject(error);
-            });
-
-            // Wait for server to be ready
-            setTimeout(() => {
-                this.checkBackendHealth()
-                    .then(() => {
-                        console.log('Backend server started successfully');
-                        resolve();
-                    })
-                    .catch(reject);
-            }, 2000);
+        this.backendProcess = spawn(this.pythonExecutable, [serverPath, String(this.backendPort)], {
+            cwd: this.getBackendDir(),
+            stdio: ['ignore', 'pipe', 'pipe']
         });
+
+        this.backendProcess.stdout.on('data', (data) => console.log(`[Python Backend]: ${data.toString().trim()}`));
+        this.backendProcess.stderr.on('data', (data) => console.error(`[Python Backend Error]: ${data.toString().trim()}`));
+        this.backendProcess.on('error', (err) => console.error('Failed to start backend process:', err));
+
+        // Wait for the server to become available
+        await this.waitForBackend();
     }
 
     /**
-     * Check backend health
+     * Periodically check the health endpoint until it responds or times out
      */
-    async checkBackendHealth() {
-        return new Promise((resolve, reject) => {
-            const http = require('http');
-
-            const req = http.get(`${this.backendUrl}/health`, (res) => {
-                if (res.statusCode === 200) {
-                    resolve(true);
-                } else {
-                    reject(new Error(`Backend health check failed with status ${res.statusCode}`));
-                }
-            });
-
-            req.on('error', reject);
-            req.setTimeout(5000, () => {
-                req.destroy();
-                reject(new Error('Backend health check timeout'));
-            });
-        });
-    }
-
-    /**
-     * Convert EXR file to JPEG
-     */
-    async convertExr(filePath, maxSize = 800, gamma = 2.2) {
-        console.log(`[PythonManager] convertExr called for: ${filePath}`);
-        console.log(`[PythonManager] Backend ready: ${this.isReady}`);
-
-        if (!this.isReady) {
-            const error = new Error('Python backend is not ready');
-            console.error('[PythonManager] Error:', error.message);
-            throw error;
-        }
-
-        // Read file content in Node.js (which can access all Windows paths including network drives)
-        let fileBuffer;
-        try {
-            fileBuffer = await fs.promises.readFile(filePath);
-            console.log(`[PythonManager] Read file: ${filePath}, size: ${fileBuffer.length} bytes`);
-        } catch (error) {
-            console.error(`[PythonManager] Failed to read file: ${filePath}`, error);
-            throw new Error(`Failed to read file: ${error.message}`);
-        }
+    async waitForBackend() {
+        const timeout = 30000; // 30 seconds
+        const interval = 1000; // 1 second
+        const startTime = Date.now();
 
         return new Promise((resolve, reject) => {
-            const http = require('http');
-
-            const postData = JSON.stringify({
-                file_data: fileBuffer.toString('base64'),
-                max_size: maxSize,
-                gamma: gamma
-            });
-
-            console.log(`[PythonManager] Sending POST request to ${this.backendUrl}/convert`);
-            console.log(`[PythonManager] Request data: file_size=${fileBuffer.length}, max_size=${maxSize}, gamma=${gamma}`);
-
-            const options = {
-                hostname: '127.0.0.1',
-                port: this.backendPort,
-                path: '/convert',
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(postData)
+            const check = () => {
+                if (Date.now() - startTime > timeout) {
+                    return reject(new Error('Backend health check timed out.'));
                 }
-            };
 
-            const req = http.request(options, (res) => {
-                console.log(`[PythonManager] Response status: ${res.statusCode}`);
-                let data = '';
-
-                res.on('data', (chunk) => {
-                    data += chunk;
+                const http = require('http');
+                const req = http.get(`${this.backendUrl}/health`, (res) => {
+                    if (res.statusCode === 200) {
+                        console.log('Backend server is healthy and responding.');
+                        return resolve();
+                    }
+                    setTimeout(check, interval);
                 });
 
+                req.on('error', (err) => {
+                    // Keep trying until timeout
+                    setTimeout(check, interval);
+                });
+            };
+            check();
+        });
+    }
+
+    /**
+     * Convert an EXR file to a JPEG data URL
+     */
+    async convertExr(filePath, maxSize = 800, gamma = 2.2) {
+        if (!this.isReady) {
+            throw new Error('Python backend is not ready. Waiting for initialization...');
+        }
+
+        const fileBuffer = await fs.promises.readFile(filePath);
+        const postData = JSON.stringify({
+            file_data: fileBuffer.toString('base64'),
+            max_size: maxSize,
+            gamma: gamma
+        });
+
+        const options = {
+            method: 'POST',
+            hostname: '127.0.0.1',
+            port: this.backendPort,
+            path: '/convert',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const http = require('http');
+            const req = http.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => { data += chunk; });
                 res.on('end', () => {
-                    console.log(`[PythonManager] Response received, length: ${data.length}`);
                     try {
                         const response = JSON.parse(data);
-                        console.log(`[PythonManager] Response parsed, success: ${response.success}`);
                         if (response.success) {
-                            console.log(`[PythonManager] Conversion successful, data length: ${response.data?.length}`);
                             resolve(response.data);
                         } else {
-                            console.error(`[PythonManager] Conversion failed: ${response.error}`);
                             reject(new Error(response.error || 'Conversion failed'));
                         }
-                    } catch (error) {
-                        console.error(`[PythonManager] Failed to parse response:`, error);
-                        console.error(`[PythonManager] Raw response:`, data);
-                        reject(new Error('Failed to parse response'));
+                    } catch (e) {
+                        reject(new Error(`Failed to parse backend response: ${data}`));
                     }
                 });
             });
 
-            req.on('error', (error) => {
-                console.error(`[PythonManager] Request error:`, error);
-                reject(error);
-            });
-
-            req.setTimeout(60000, () => {  // Increased to 60 seconds for large files
-                console.error(`[PythonManager] Request timeout for: ${filePath}`);
+            req.on('error', reject);
+            req.setTimeout(60000, () => {
                 req.destroy();
-                reject(new Error('Conversion timeout'));
+                reject(new Error('Conversion request timed out.'));
             });
 
             req.write(postData);
@@ -569,10 +400,11 @@ class PythonManager {
     }
 
     /**
-     * Stop backend server
+     * Stop the backend server process
      */
     async stop() {
         if (this.backendProcess) {
+            console.log('Stopping Python backend server...');
             this.backendProcess.kill();
             this.backendProcess = null;
             this.isReady = false;
