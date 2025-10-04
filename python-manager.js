@@ -171,7 +171,9 @@ class PythonManager {
                 response.pipe(file);
                 file.on('finish', () => file.close(resolve));
             }).on('error', (err) => {
-                fs.unlink(dest, () => reject(err));
+                file.close(() => {
+                    fs.unlink(dest, () => reject(err));
+                });
             });
         });
     }
@@ -351,9 +353,8 @@ class PythonManager {
             throw new Error('Python backend is not ready. Waiting for initialization...');
         }
 
-        const fileBuffer = await fs.promises.readFile(filePath);
         const postData = JSON.stringify({
-            file_data: fileBuffer.toString('base64'),
+            file_path: filePath,
             max_size: maxSize,
             gamma: gamma
         });

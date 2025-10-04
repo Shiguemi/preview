@@ -152,6 +152,7 @@ app.on('window-all-closed', function () {
 
 app.on('before-quit', async () => {
   await pythonManager.stop();
+  logStream.end();
 });
 
 ipcMain.handle('select-folder', async (event, recursive = false) => {
@@ -171,67 +172,90 @@ ipcMain.handle('open-folder', async (event, folderPath, recursive = false) => {
   return handleOpenFolder(folderPath, recursive);
 });
 
-function readFilesRecursively(dirPath, baseDir = dirPath) {
-  let results = [];
+let fileScannerIterator = null; // To hold the state of the file scanning generator
 
-  try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+// This function is now an async generator, making it pausable
+async function* streamFilesRecursively(dirPath, baseDir = dirPath) {
+    const BATCH_SIZE = 50;
+    let fileBatch = [];
+    let dirs = [dirPath];
 
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
+    while (dirs.length > 0) {
+        const currentDir = dirs.pop();
+        try {
+            const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
 
-      if (entry.isDirectory()) {
-        // Recursively read subdirectories
-        results = results.concat(readFilesRecursively(fullPath, baseDir));
-      } else {
-        // Add file with relative path from base directory
-        const relativePath = path.relative(baseDir, dirPath);
-        const displayName = relativePath ? path.join(relativePath, entry.name) : entry.name;
+            for (const entry of entries) {
+                const fullPath = path.join(currentDir, entry.name);
 
-        results.push({
-          name: displayName,
-          path: fullPath,
-          url: url.format({
-            pathname: fullPath,
-            protocol: 'file:',
-            slashes: true
-          })
-        });
-      }
+                if (entry.isDirectory()) {
+                    dirs.push(fullPath);
+                } else {
+                    const relativePath = path.relative(baseDir, currentDir);
+                    const displayName = relativePath ? path.join(relativePath, entry.name) : entry.name;
+
+                    fileBatch.push({
+                        name: displayName,
+                        path: fullPath,
+                        url: url.format({
+                            pathname: fullPath,
+                            protocol: 'file:',
+                            slashes: true
+                        })
+                    });
+
+                    if (fileBatch.length >= BATCH_SIZE) {
+                        yield fileBatch;
+                        fileBatch = [];
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error reading directory: ${currentDir}`, error);
+            if (mainWindow) {
+                mainWindow.webContents.send('folder-scan-error', error.message);
+            }
+        }
     }
-  } catch (error) {
-    console.error(`Error reading directory: ${dirPath}`, error);
-  }
 
-  return results;
+    if (fileBatch.length > 0) {
+        yield fileBatch;
+    }
 }
 
-function handleOpenFolder(itemPath, recursive = false) {
+async function handleOpenFolder(itemPath, recursive = false) {
   if (!itemPath || typeof itemPath !== 'string') {
     console.log('Invalid folder path received.');
-    return null;
+    return;
   }
 
   let folderPath = itemPath;
   try {
-    const stats = fs.statSync(itemPath);
+    const stats = await fs.promises.stat(itemPath);
     if (stats.isFile()) {
       folderPath = path.dirname(itemPath);
     } else if (!stats.isDirectory()) {
       console.log(`Path is not a directory or file: ${itemPath}`);
-      return null;
+      return;
     }
   } catch (error) {
     console.error(`Error accessing path: ${itemPath}`, error);
-    return null;
+    return;
   }
 
-  let files;
+  addToRecentFolders(folderPath);
+
+  mainWindow.webContents.send('folder-opened', {
+    folderPath,
+    imageExtensions,
+  });
 
   if (recursive) {
-    files = readFilesRecursively(folderPath);
+    // Create the generator but don't start it yet. The renderer will request the first batch.
+    fileScannerIterator = streamFilesRecursively(folderPath);
   } else {
-    files = fs.readdirSync(folderPath).map(file => {
+    // For non-recursive, we can send everything at once as it's usually fast.
+    const files = (await fs.promises.readdir(folderPath)).map(file => {
       const filePath = path.join(folderPath, file);
       return {
         name: file,
@@ -243,17 +267,23 @@ function handleOpenFolder(itemPath, recursive = false) {
         })
       };
     });
+    mainWindow.webContents.send('folder-scan-update', files);
+    mainWindow.webContents.send('folder-scan-complete');
   }
-
-  // Add to recent folders
-  addToRecentFolders(folderPath);
-
-  return {
-    files,
-    imageExtensions,
-    folderPath,
-  };
 }
+
+// New handler to drive the generator
+ipcMain.on('request-more-files', async () => {
+  if (fileScannerIterator) {
+    const result = await fileScannerIterator.next();
+    if (!result.done) {
+      mainWindow.webContents.send('folder-scan-update', result.value);
+    } else {
+      mainWindow.webContents.send('folder-scan-complete');
+      fileScannerIterator = null; // Clean up
+    }
+  }
+});
 
 ipcMain.handle('get-thumbnail', async (event, filePath) => {
     if (cache.has(filePath)) {
