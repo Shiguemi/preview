@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         }
       });
-    }, { rootMargin: '200px' });
+    }, { rootMargin: '0px 0px 50px 0px' });
   };
 
   // IPC Listeners for asynchronous folder scanning
