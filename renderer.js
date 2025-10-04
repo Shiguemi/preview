@@ -192,6 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               img.onload = () => {
                 if (spinner) spinner.remove();
                 img.classList.add('loaded');
+                item.classList.remove('placeholder'); // Remove placeholder style
 
                 // Remove brightness filter after flash animation
                 setTimeout(() => {
@@ -208,6 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               img.onload = () => {
                 if (spinner) spinner.remove();
                 img.classList.add('loaded');
+                item.classList.remove('placeholder'); // Also remove on error
                 setTimeout(() => {
                   img.style.filter = 'brightness(1)';
                 }, 230);
@@ -219,6 +221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               img.src = fileUrl;
               if (spinner) spinner.remove();
               img.classList.add('loaded');
+              item.classList.remove('placeholder'); // Also remove on error
             });
           } else if (!isImage) {
             updateProgress();
@@ -248,6 +251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isImage) {
         imageFileIndex++;
         const currentIndex = imageFileIndex;
+        item.classList.add('placeholder'); // Add placeholder class
 
         // Create loading spinner
         const spinner = document.createElement('i');
